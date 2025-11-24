@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Users, BookOpen, Loader2, Shield, FileText, RefreshCw } from 'lucide-react';
+import { Users, BookOpen, Loader2, Shield, RefreshCw } from 'lucide-react';
 import { supabase, Book, Profile } from '../lib/supabase';
 import StaticPagesManager from '../components/StaticPagesManager';
 

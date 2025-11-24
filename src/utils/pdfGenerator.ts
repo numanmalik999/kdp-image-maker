@@ -30,7 +30,6 @@ export async function generateKDPPDF(options: PDFGeneratorOptions): Promise<void
   const pageWidth = widthInches;
   const pageHeight = heightInches;
   const textWidth = pageWidth - 2 * margin;
-  const textHeight = pageHeight - 2 * margin;
 
   doc.setFont('helvetica');
 
