@@ -20,29 +20,20 @@ export default function Signup({ onSignupSuccess, onSwitchToLogin }: SignupProps
     setLoading(true);
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { error: authError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            full_name: fullName, // Pass full_name to user metadata for the trigger to pick up
+          }
+        }
       });
 
       if (authError) throw authError;
 
-      if (authData.user) {
-        const isAdmin = email === 'numanmalik987@gmail.com';
-
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: authData.user.id,
-              email,
-              full_name: fullName || null,
-              role: isAdmin ? 'admin' : 'user',
-            },
-          ]);
-
-        if (profileError) throw profileError;
-      }
+      // The profile creation is now handled by the database trigger (handle_new_user)
+      // which also sets the admin role for numanmalik987@gmail.com.
 
       onSignupSuccess();
     } catch (err) {
