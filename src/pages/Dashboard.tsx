@@ -25,21 +25,26 @@ export default function Dashboard({ onEditBook, onViewPricing, onManageBilling }
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    loadUser();
-    loadBooks();
+    loadUserAndBooks();
   }, []);
 
-  const loadUser = async () => {
+  const loadUserAndBooks = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     setUser(user);
+    if (user) {
+      loadBooks(user.id);
+    } else {
+      setLoading(false);
+    }
   };
 
-  const loadBooks = async () => {
+  const loadBooks = async (userId: string) => {
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('books')
         .select('*')
+        .eq('user_id', userId) // CRITICAL: Filter by user_id
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
@@ -86,7 +91,7 @@ export default function Dashboard({ onEditBook, onViewPricing, onManageBilling }
       await incrementBookCount(user.id);
 
       setShowNewBookModal(false);
-      loadBooks();
+      loadBooks(user.id);
 
       if (book) {
         onEditBook(book.id);
@@ -112,7 +117,9 @@ export default function Dashboard({ onEditBook, onViewPricing, onManageBilling }
 
       if (error) throw error;
 
-      loadBooks();
+      if (user) {
+        loadBooks(user.id);
+      }
     } catch (error) {
       console.error('Error deleting book:', error);
       alert('Failed to delete book. Please try again.');
