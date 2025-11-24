@@ -124,7 +124,9 @@ function App() {
         return;
       }
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-portal-session`;
+      // Hardcoded Supabase URL to ensure Edge Function call works
+      const supabaseUrl = 'https://lrwjdykjaulwwdswuuoa.supabase.co';
+      const apiUrl = `${supabaseUrl}/functions/v1/create-portal-session`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
