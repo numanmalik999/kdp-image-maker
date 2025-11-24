@@ -2,9 +2,11 @@ import { BookOpen, Palette, Download, Zap, CheckCircle } from 'lucide-react';
 
 interface LandingProps {
   onGetStarted: () => void;
+  onSignIn: () => void;
+  onSignUp: () => void;
 }
 
-export default function Landing({ onGetStarted }: LandingProps) {
+export default function Landing({ onGetStarted, onSignIn, onSignUp }: LandingProps) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <nav className="bg-white border-b border-gray-200">
@@ -13,12 +15,20 @@ export default function Landing({ onGetStarted }: LandingProps) {
             <BookOpen className="w-8 h-8 text-blue-600" />
             <span className="text-2xl font-bold text-gray-900">KDP Coloring Books</span>
           </div>
-          <button
-            onClick={onGetStarted}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-          >
-            View Pricing
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onSignIn}
+              className="px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+            >
+              Sign In
+            </button>
+            <button
+              onClick={onSignUp}
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              Sign Up
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -35,7 +45,7 @@ export default function Landing({ onGetStarted }: LandingProps) {
             className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white text-lg rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-lg"
           >
             <Zap className="w-6 h-6" />
-            View Pricing Plans
+            Get Started
           </button>
         </div>
       </section>
@@ -145,7 +155,7 @@ export default function Landing({ onGetStarted }: LandingProps) {
             onClick={onGetStarted}
             className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white text-lg rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-lg"
           >
-            View Pricing Plans
+            Get Started
           </button>
         </div>
       </section>

@@ -88,6 +88,16 @@ function App() {
     setCurrentView('pricing');
   };
 
+  const handleSignIn = () => {
+    setCurrentView('dashboard'); // Trigger auth flow
+    setAuthView('login');
+  };
+
+  const handleSignUp = () => {
+    setCurrentView('dashboard'); // Trigger auth flow
+    setAuthView('signup');
+  };
+
   const handleEditBook = (bookId: string) => {
     setCurrentBookId(bookId);
     setCurrentView('editor');
@@ -188,7 +198,11 @@ function App() {
     if (currentView === 'landing') {
       return (
         <>
-          <Landing onGetStarted={handleGetStarted} />
+          <Landing 
+            onGetStarted={handleGetStarted} 
+            onSignIn={handleSignIn}
+            onSignUp={handleSignUp}
+          />
           <Footer onPageClick={handleViewStaticPage} />
         </>
       );
