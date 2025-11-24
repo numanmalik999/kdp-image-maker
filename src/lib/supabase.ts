@@ -1,8 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Hardcoded values from Supabase context to resolve environment variable loading issues.
-const supabaseUrl = 'https://lrwjdykjaulwwdswuuoa.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxyd2pkeWtqYXVsd3dkc3d1dW9hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwMDY0NDcsImV4cCI6MjA3OTU4MjQ0N30.fH4hCKPAYSsdn-gBZy-KQ6PZYo3NCDDwUogzRDpV6OI';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables');
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
