@@ -102,7 +102,27 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     }
   };
 
-  const handleGeneratePage = async (pageNumber: number, activityType: string, prompt: string, model: string) => {
+  const updatePageData = (pageNumber: number, updates: Partial<Page>) => {
+    const updatedPages = [...pages];
+    const pageIndex = updatedPages.findIndex(p => p.pageNumber === pageNumber);
+
+    if (pageIndex >= 0) {
+      updatedPages[pageIndex] = { ...updatedPages[pageIndex], ...updates };
+    } else {
+      // Create a new page entry if it doesn't exist yet
+      updatedPages.push({
+        id: `page-${pageNumber}`,
+        pageNumber,
+        content: updates.content || '',
+        imageUrl: updates.imageUrl,
+      });
+    }
+
+    updatedPages.sort((a, b) => a.pageNumber - b.pageNumber);
+    setPages(updatedPages);
+  };
+
+  const handleGeneratePageText = async (pageNumber: number, prompt: string) => {
     if (!sessionToken || !book) {
       alert('Authentication required for AI generation.');
       return;
@@ -124,75 +144,33 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         return;
       }
 
-      let content = '';
-      let imageUrl: string | undefined = undefined;
-      const fullPrompt = `${activityType}: ${prompt}`;
+      // Generate Text (GPT-4o)
+      const content = await generatePageContent(
+        prompt,
+        pageNumber,
+        book.target_pages,
+        book.font_size,
+        sessionToken,
+        book.book_prompt || undefined
+      );
+      
+      await decrementAICredits(user.id);
+      await incrementPageCount(user.id);
 
-      if (model === 'Image & Text') {
-        // 1. Generate Image (DALL-E 3)
-        imageUrl = await generateColoringImage(fullPrompt, 'DALL-E 3', bookId, sessionToken);
-        await decrementAICredits(user.id);
-        await incrementImageCount(user.id);
+      updatePageData(pageNumber, { content });
 
-        // 2. Generate Text (GPT-4o)
-        content = await generatePageContent(
-          prompt,
-          pageNumber,
-          book.target_pages,
-          book.font_size,
-          sessionToken,
-          book.book_prompt || undefined
-        );
-        await decrementAICredits(user.id); // Assuming text generation also costs a credit
-        await incrementPageCount(user.id);
-
-      } else if (model === 'Gemini') {
-        // 1. Generate Text (GPT-4o, since Gemini function is currently text-only placeholder)
-        content = await generatePageContent(
-          prompt,
-          pageNumber,
-          book.target_pages,
-          book.font_size,
-          sessionToken,
-          book.book_prompt || undefined
-        );
-        await decrementAICredits(user.id);
-        await incrementPageCount(user.id);
-      }
-
-      const updatedPages = [...pages];
-      const pageIndex = updatedPages.findIndex(p => p.pageNumber === pageNumber);
-
-      if (pageIndex >= 0) {
-        updatedPages[pageIndex] = {
-          ...updatedPages[pageIndex],
-          imageUrl: imageUrl || updatedPages[pageIndex].imageUrl,
-          content: content || updatedPages[pageIndex].content
-        };
-      } else {
-        updatedPages.push({
-          id: `page-${pageNumber}`,
-          pageNumber,
-          content: content || prompt,
-          imageUrl,
-        });
-      }
-
-      updatedPages.sort((a, b) => a.pageNumber - b.pageNumber);
-      setPages(updatedPages);
-
-      setToastMessage(`Page ${pageNumber} generated successfully!`);
+      setToastMessage(`Page ${pageNumber} text generated successfully!`);
       setShowToast(true);
       setTimeout(() => setShowToast(false), 2000);
     } catch (error) {
-      console.error('Error generating page:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to generate page. Please try again.';
+      console.error('Error generating page text:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate page text. Please try again.';
       alert(errorMessage);
       throw error;
     }
   };
 
-  const handleGenerateCover = async (type: 'front' | 'back', activityType: string, prompt: string, model: string) => {
+  const handleGeneratePageImage = async (pageNumber: number, prompt: string) => {
     if (!sessionToken || !book) {
       alert('Authentication required for AI generation.');
       return;
@@ -208,10 +186,43 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         return;
       }
 
-      const fullPrompt = `${activityType}: ${prompt}`;
+      // Generate Image (DALL-E 3)
+      const imageUrl = await generateColoringImage(prompt, 'DALL-E 3', bookId, sessionToken);
       
-      // Covers only generate images for now
-      const imageUrl = await generateColoringImage(fullPrompt, model, bookId, sessionToken);
+      await decrementAICredits(user.id);
+      await incrementImageCount(user.id);
+
+      updatePageData(pageNumber, { imageUrl });
+
+      setToastMessage(`Page ${pageNumber} image generated successfully!`);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+    } catch (error) {
+      console.error('Error generating page image:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate page image. Please try again.';
+      alert(errorMessage);
+      throw error;
+    }
+  };
+
+  const handleGenerateCoverImage = async (type: 'front' | 'back', prompt: string) => {
+    if (!sessionToken || !book) {
+      alert('Authentication required for AI generation.');
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const creditsCheck = await checkAICredits(user.id);
+      if (!creditsCheck.allowed) {
+        alert(creditsCheck.message);
+        return;
+      }
+
+      // Covers only generate images
+      const imageUrl = await generateColoringImage(prompt, 'DALL-E 3', bookId, sessionToken);
 
       await decrementAICredits(user.id);
       await incrementImageCount(user.id);
@@ -262,6 +273,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     try {
       setSaving(true);
 
+      // Delete existing pages (excluding covers)
       const { error: deleteError } = await supabase
         .from('book_pages')
         .delete()
@@ -271,6 +283,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
 
       if (deleteError) throw deleteError;
 
+      // Insert/Update regular pages
       for (const page of pages) {
         if (page.content || page.imageUrl) {
           const { error: pageError } = await supabase
@@ -288,6 +301,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         }
       }
 
+      // Upsert Front Cover
       if (frontCover) {
         const { error: frontError } = await supabase
           .from('book_pages')
@@ -305,6 +319,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         if (frontError) throw frontError;
       }
 
+      // Upsert Back Cover
       if (backCover) {
         const { error: backError } = await supabase
           .from('book_pages')
@@ -358,6 +373,9 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       if (pageIndex >= 0) {
         updatedPages[pageIndex] = { ...updatedPages[pageIndex], content };
         setPages(updatedPages);
+      } else {
+        // If page doesn't exist, create it with content
+        updatePageData(currentPage, { content });
       }
     }
   };
@@ -580,8 +598,12 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
           hasBackCover={book.has_back_cover}
           isFrontCover={isFrontCover}
           isBackCover={isBackCover}
-          onGeneratePage={handleGeneratePage}
-          onGenerateCover={handleGenerateCover}
+          
+          // Updated props
+          onGenerateText={handleGeneratePageText}
+          onGenerateImage={handleGeneratePageImage}
+          onGenerateCoverImage={handleGenerateCoverImage}
+
           onNextPage={handleNextPage}
           onPreviousPage={handlePreviousPage}
           onSaveBook={saveBook}

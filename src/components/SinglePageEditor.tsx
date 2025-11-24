@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, ChevronLeft, ChevronRight, Edit2, Plus, PlusCircle, CheckCircle } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Edit2, Plus, PlusCircle, CheckCircle, FileText, Image as ImageIcon } from 'lucide-react';
 
 interface SinglePageEditorProps {
   currentPage: number;
@@ -11,8 +11,12 @@ interface SinglePageEditorProps {
   hasBackCover: boolean;
   isFrontCover?: boolean;
   isBackCover?: boolean;
-  onGeneratePage: (pageNumber: number, activityType: string, prompt: string, model: string) => Promise<void>;
-  onGenerateCover: (type: 'front' | 'back', activityType: string, prompt: string, model: string) => Promise<void>;
+  
+  // Updated props: separate handlers for text and image
+  onGenerateText: (pageNumber: number, prompt: string) => Promise<void>;
+  onGenerateImage: (pageNumber: number, prompt: string) => Promise<void>;
+  onGenerateCoverImage: (type: 'front' | 'back', prompt: string) => Promise<void>;
+  
   onNextPage: () => void;
   onPreviousPage: () => void;
   onSaveBook: () => void;
@@ -35,8 +39,9 @@ export default function SinglePageEditor({
   hasBackCover,
   isFrontCover,
   isBackCover,
-  onGeneratePage,
-  onGenerateCover,
+  onGenerateText,
+  onGenerateImage,
+  onGenerateCoverImage,
   onNextPage,
   onPreviousPage,
   onSaveBook,
@@ -48,10 +53,9 @@ export default function SinglePageEditor({
   onCompleteBook,
   isSaving,
 }: SinglePageEditorProps) {
-  const [activityType, setActivityType] = useState('Coloring/Tracing');
-  const [model, setModel] = useState('Image & Text');
   const [prompt, setPrompt] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
+  const [isGeneratingText, setIsGeneratingText] = useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [editedContent, setEditedContent] = useState(pageContent);
   const [isEditingContent, setIsEditingContent] = useState(false);
 
@@ -59,25 +63,38 @@ export default function SinglePageEditor({
     setEditedContent(pageContent);
   }, [pageContent]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (type: 'text' | 'image') => {
     const finalPrompt = prompt.trim() || bookPrompt;
     if (!finalPrompt) {
       alert('Please enter a prompt or set a book description.');
       return;
     }
 
-    setIsGenerating(true);
+    if (type === 'text') {
+      setIsGeneratingText(true);
+    } else {
+      setIsGeneratingImage(true);
+    }
+
     try {
-      if (isFrontCover) {
-        await onGenerateCover('front', activityType, finalPrompt, model);
-      } else if (isBackCover) {
-        await onGenerateCover('back', activityType, finalPrompt, model);
+      if (isFrontCover || isBackCover) {
+        // Covers only generate images
+        if (type === 'image') {
+          await onGenerateCoverImage(isFrontCover ? 'front' : 'back', finalPrompt);
+        } else {
+          alert('Text generation is not available for covers.');
+        }
       } else {
-        await onGeneratePage(currentPage, activityType, finalPrompt, model);
+        if (type === 'text') {
+          await onGenerateText(currentPage, finalPrompt);
+        } else {
+          await onGenerateImage(currentPage, finalPrompt);
+        }
       }
       setPrompt('');
     } finally {
-      setIsGenerating(false);
+      setIsGeneratingText(false);
+      setIsGeneratingImage(false);
     }
   };
 
@@ -98,6 +115,8 @@ export default function SinglePageEditor({
     if (isBackCover) return 'Back Cover';
     return `Page ${currentPage} of ${totalPages}`;
   };
+
+  const isGenerating = isGeneratingText || isGeneratingImage;
 
   return (
     <div className="h-full flex">
@@ -128,41 +147,12 @@ export default function SinglePageEditor({
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Activity Type:
-            </label>
-            <select
-              value={activityType}
-              onChange={(e) => setActivityType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isGenerating}
-            >
-              <option value="Coloring/Tracing">Coloring/Tracing</option>
-              <option value="Word Search">Word Search</option>
-              <option value="Maze">Maze</option>
-              <option value="Connect the Dots">Connect the Dots</option>
-              <option value="Spot the Difference">Spot the Difference</option>
-              <option value="Counting">Counting</option>
-            </select>
-          </div>
+          {/* Removed Activity Type and AI Model selection */}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              AI Model:
+              AI Prompt:
             </label>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              disabled={isGenerating}
-            >
-              <option value="Image & Text">Image & Text (ChatGPT)</option>
-              <option value="Gemini">Text Only (Gemini)</option>
-            </select>
-          </div>
-
-          <div>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -173,24 +163,53 @@ export default function SinglePageEditor({
             />
           </div>
 
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Generating...
-              </>
-            ) : isFrontCover ? (
-              'Generate Front Cover'
-            ) : isBackCover ? (
-              'Generate Back Cover'
-            ) : (
-              `Generate Page ${currentPage}`
+          <div className="grid grid-cols-2 gap-2">
+            {/* Generate Text Button (Only for pages, not covers) */}
+            {!(isFrontCover || isBackCover) && (
+              <button
+                onClick={() => handleGenerate('text')}
+                disabled={isGenerating}
+                className="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {isGeneratingText ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    Text...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4" />
+                    Generate Text
+                  </>
+                )}
+              </button>
             )}
-          </button>
+
+            {/* Generate Image Button (For pages and covers) */}
+            <button
+              onClick={() => handleGenerate('image')}
+              disabled={isGenerating}
+              className={`w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+                (isFrontCover || isBackCover) ? 'col-span-2' : ''
+              }`}
+            >
+              {isGeneratingImage ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Image...
+                </>
+              ) : isFrontCover ? (
+                'Generate Front Cover Image'
+              ) : isBackCover ? (
+                'Generate Back Cover Image'
+              ) : (
+                <>
+                  <ImageIcon className="w-4 h-4" />
+                  Generate Image
+                </>
+              )}
+            </button>
+          </div>
 
           {!isFrontCover && !isBackCover && (
             <>
