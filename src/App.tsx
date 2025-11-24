@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from './lib/supabase';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import BookEditor from './pages/BookEditor/BookEditor';
 import AdminDashboard from './pages/AdminDashboard';
@@ -11,52 +12,51 @@ import Signup from './pages/Signup';
 import Footer from './components/Footer';
 import { Loader2 } from 'lucide-react';
 
-type View = 'landing' | 'dashboard' | 'editor' | 'admin' | 'pricing' | 'static-page';
-type AuthView = 'login' | 'signup';
+type UserRole = 'user' | 'admin' | null;
+type UserTier = 'free' | 'pro' | 'premium';
+
+// Component to handle authentication and routing protection
+const AuthWrapper = ({ children, user, loading, userRole, requiredRole }: { children: React.ReactNode, user: any, loading: boolean, userRole: UserRole, requiredRole?: UserRole }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      // Redirect unauthenticated users to login/landing
+      if (location.pathname !== '/login' && location.pathname !== '/signup' && location.pathname !== '/pricing' && !location.pathname.startsWith('/page/')) {
+        navigate('/', { replace: true });
+      }
+    } else if (requiredRole === 'admin' && userRole !== 'admin') {
+      // Redirect non-admins trying to access admin page
+      navigate('/dashboard', { replace: true });
+    } else if (user && (location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/')) {
+      // Redirect authenticated users from auth pages to dashboard
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, loading, userRole, requiredRole, navigate, location.pathname]);
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+};
 
 function App() {
   const [user, setUser] = useState<any>(null);
-  const [userRole, setUserRole] = useState<'user' | 'admin' | null>(null);
-  const [userTier, setUserTier] = useState<'free' | 'pro' | 'premium'>('free');
+  const [userRole, setUserRole] = useState<UserRole>(null);
+  const [userTier, setUserTier] = useState<UserTier>('free');
   const [loading, setLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<View>('landing');
-  const [currentBookId, setCurrentBookId] = useState<string | null>(null);
-  const [currentPageSlug, setCurrentPageSlug] = useState<string | null>(null);
-  const [authView, setAuthView] = useState<AuthView>('login');
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  useEffect(() => {
-    checkUser();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadUserProfile(session.user.id);
-      } else {
-        setUserRole(null);
-      }
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
-  }, []);
-
-  const checkUser = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        await loadUserProfile(session.user.id);
-        setCurrentView('dashboard');
-      }
-    } catch (error) {
-      console.error('Error checking user:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadUserProfile = async (userId: string) => {
+  const loadUserProfile = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -72,62 +72,71 @@ function App() {
       setUserRole('user');
       setUserTier('free');
     }
+  }, []);
+
+  useEffect(() => {
+    const checkUser = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await loadUserProfile(session.user.id);
+        }
+      } catch (error) {
+        console.error('Error checking user:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session?.user) {
+        loadUserProfile(session.user.id);
+      } else {
+        setUserRole(null);
+        setUserTier('free');
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [loadUserProfile]);
+
+  const handleLoginSuccess = () => {
+    navigate('/dashboard', { replace: true });
   };
 
-  const handleLoginSuccess = async () => {
-    await checkUser();
-    setCurrentView('dashboard');
-  };
-
-  const handleSignupSuccess = async () => {
-    await checkUser();
-    setCurrentView('dashboard');
-  };
-
-  const handleGetStarted = () => {
-    setCurrentView('pricing');
-  };
-
-  const handleSignIn = () => {
-    setCurrentView('dashboard'); // Trigger auth flow
-    setAuthView('login');
-  };
-
-  const handleSignUp = () => {
-    setCurrentView('dashboard'); // Trigger auth flow
-    setAuthView('signup');
+  const handleSignupSuccess = () => {
+    navigate('/dashboard', { replace: true });
   };
 
   const handleEditBook = (bookId: string) => {
-    setCurrentBookId(bookId);
-    setCurrentView('editor');
+    navigate(`/editor/${bookId}`);
   };
 
   const handleBackToDashboard = () => {
-    setCurrentView(userRole === 'admin' ? 'admin' : 'dashboard');
-    setCurrentBookId(null);
+    navigate('/dashboard');
   };
 
   const handleSwitchToAdmin = () => {
-    setCurrentView('admin');
+    navigate('/admin');
   };
 
   const handleSwitchToUser = () => {
-    setCurrentView('dashboard');
+    navigate('/dashboard');
   };
 
   const handleViewPricing = () => {
-    setCurrentView('pricing');
+    navigate('/pricing');
   };
 
   const handleViewStaticPage = (slug: string) => {
-    setCurrentPageSlug(slug);
-    setCurrentView('static-page');
-  };
-
-  const handleBackFromStaticPage = () => {
-    setCurrentView(user ? 'dashboard' : 'landing');
-    setCurrentPageSlug(null);
+    navigate(`/page/${slug}`);
   };
 
   const handleManageBilling = async () => {
@@ -165,134 +174,91 @@ function App() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setUserRole(null);
-    setCurrentView('landing');
+    navigate('/', { replace: true });
   };
 
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user) {
-    if (currentView === 'pricing') {
-      return (
-        <>
-          <Pricing
-            currentTier={userTier}
-            onBack={() => setCurrentView('landing')}
-            onAuthRequired={(authType) => {
-              setCurrentView('dashboard'); // Switch to dashboard view which triggers auth flow
-              setAuthView(authType);
-            }}
-          />
-          <Footer onPageClick={handleViewStaticPage} />
-        </>
-      );
-    }
-
-    if (currentView === 'landing') {
-      return (
-        <>
-          <Landing 
-            onGetStarted={handleGetStarted} 
-            onSignIn={handleSignIn}
-            onSignUp={handleSignUp}
-          />
-          <Footer onPageClick={handleViewStaticPage} />
-        </>
-      );
-    }
-
-    // If not on landing or pricing, force auth flow
-    if (authView === 'signup') {
-      return (
-        <Signup
-          onSignupSuccess={handleSignupSuccess}
-          onSwitchToLogin={() => setAuthView('login')}
-        />
-      );
-    }
-    return (
-      <Login
-        onLoginSuccess={handleLoginSuccess}
-        onSwitchToSignup={() => setAuthView('signup')}
-      />
-    );
-  }
-
-  if (currentView === 'editor' && currentBookId) {
-    return <BookEditor bookId={currentBookId} onBack={handleBackToDashboard} />;
-  }
-
-  if (currentView === 'pricing') {
-    return (
-      <>
-        <Pricing
-          currentTier={userTier}
-          onBack={() => setCurrentView('dashboard')}
-        />
-        <Footer onPageClick={handleViewStaticPage} />
-      </>
-    );
-  }
-
-  if (currentView === 'static-page' && currentPageSlug) {
-    return (
-      <>
-        <StaticPage slug={currentPageSlug} onBack={handleBackFromStaticPage} />
-        <Footer onPageClick={handleViewStaticPage} />
-      </>
-    );
-  }
-
-  if (currentView === 'admin' && userRole === 'admin') {
-    return (
-      <div>
-        <AdminDashboard />
-        <button
-          onClick={handleSwitchToUser}
-          className="fixed bottom-6 left-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-lg"
-        >
-          Switch to User View
-        </button>
-        <button
-          onClick={handleLogout}
-          className="fixed bottom-6 right-6 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-lg"
-        >
-          Logout
-        </button>
-      </div>
-    );
-  }
+  const renderFooter = location.pathname !== '/admin' && !location.pathname.startsWith('/editor/');
 
   return (
-    <>
-      <Dashboard
-        onEditBook={handleEditBook}
-        onViewPricing={handleViewPricing}
-        onManageBilling={handleManageBilling}
-      />
-      <Footer onPageClick={handleViewStaticPage} />
-      {userRole === 'admin' && (
-        <button
-          onClick={handleSwitchToAdmin}
-          className="fixed bottom-6 left-6 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium shadow-lg"
-        >
-          Admin Dashboard
-        </button>
-      )}
-      <button
-        onClick={handleLogout}
-        className="fixed bottom-6 right-6 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-lg"
-      >
-        Logout
-      </button>
-    </>
+    <AuthWrapper user={user} loading={loading} userRole={userRole}>
+      <div className="flex flex-col min-h-screen">
+        <main className="flex-1">
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/" element={
+              <Landing 
+                onGetStarted={() => navigate('/pricing')} 
+                onSignIn={() => navigate('/login')}
+                onSignUp={() => navigate('/signup')}
+              />
+            } />
+            <Route path="/login" element={<Login onLoginSuccess={handleLoginSuccess} onSwitchToSignup={() => navigate('/signup')} />} />
+            <Route path="/signup" element={<Signup onSignupSuccess={handleSignupSuccess} onSwitchToLogin={() => navigate('/login')} />} />
+            <Route path="/pricing" element={<Pricing currentTier={userTier} onBack={() => navigate(-1)} onAuthRequired={(type) => navigate(type === 'login' ? '/login' : '/signup')} />} />
+            <Route path="/page/:slug" element={<StaticPage slug={location.pathname.split('/').pop() || ''} onBack={() => navigate(-1)} />} />
+
+            {/* Authenticated Routes */}
+            <Route path="/dashboard" element={
+              <Dashboard
+                onEditBook={handleEditBook}
+                onViewPricing={handleViewPricing}
+                onManageBilling={handleManageBilling}
+              />
+            } />
+            <Route path="/editor/:bookId" element={
+              <BookEditor 
+                bookId={location.pathname.split('/').pop() || ''} 
+                onBack={handleBackToDashboard} 
+              />
+            } />
+
+            {/* Admin Route */}
+            <Route path="/admin" element={
+              <AuthWrapper user={user} loading={loading} userRole={userRole} requiredRole="admin">
+                <AdminDashboard />
+              </AuthWrapper>
+            } />
+
+            {/* Fallback Route */}
+            <Route path="*" element={
+              <div className="p-12 text-center">
+                <h1 className="text-2xl font-bold">404 - Page Not Found</h1>
+                <button onClick={() => navigate('/')} className="mt-4 text-blue-600 hover:underline">Go Home</button>
+              </div>
+            } />
+          </Routes>
+        </main>
+
+        {renderFooter && <Footer onPageClick={handleViewStaticPage} />}
+
+        {user && location.pathname !== '/admin' && !location.pathname.startsWith('/editor/') && (
+          <button
+            onClick={handleLogout}
+            className="fixed bottom-6 right-6 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-lg z-40"
+          >
+            Logout
+          </button>
+        )}
+
+        {user && userRole === 'admin' && location.pathname !== '/admin' && !location.pathname.startsWith('/editor/') && (
+          <button
+            onClick={handleSwitchToAdmin}
+            className="fixed bottom-6 left-6 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium shadow-lg z-40"
+          >
+            Admin Dashboard
+          </button>
+        )}
+        
+        {user && userRole === 'admin' && location.pathname === '/admin' && (
+          <button
+            onClick={handleSwitchToUser}
+            className="fixed bottom-6 left-6 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-lg z-40"
+          >
+            Switch to User View
+          </button>
+        )}
+      </div>
+    </AuthWrapper>
   );
 }
 
