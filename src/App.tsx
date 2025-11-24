@@ -84,6 +84,10 @@ function App() {
     setCurrentView('dashboard');
   };
 
+  const handleGetStarted = () => {
+    setCurrentView('pricing');
+  };
+
   const handleEditBook = (bookId: string) => {
     setCurrentBookId(bookId);
     setCurrentView('editor');
@@ -165,18 +169,32 @@ function App() {
   }
 
   if (!user) {
-    if (currentView === 'landing') {
+    if (currentView === 'pricing') {
       return (
         <>
-          <Landing onGetStarted={() => {
-            setCurrentView('dashboard');
-            setAuthView('login');
-          }} />
+          <Pricing
+            currentTier={userTier}
+            onBack={() => setCurrentView('landing')}
+            onAuthRequired={(authType) => {
+              setCurrentView('dashboard'); // Switch to dashboard view which triggers auth flow
+              setAuthView(authType);
+            }}
+          />
           <Footer onPageClick={handleViewStaticPage} />
         </>
       );
     }
 
+    if (currentView === 'landing') {
+      return (
+        <>
+          <Landing onGetStarted={handleGetStarted} />
+          <Footer onPageClick={handleViewStaticPage} />
+        </>
+      );
+    }
+
+    // If not on landing or pricing, force auth flow
     if (authView === 'signup') {
       return (
         <Signup

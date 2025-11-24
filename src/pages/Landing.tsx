@@ -17,7 +17,7 @@ export default function Landing({ onGetStarted }: LandingProps) {
             onClick={onGetStarted}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
           >
-            Get Started
+            View Pricing
           </button>
         </div>
       </nav>
@@ -35,7 +35,7 @@ export default function Landing({ onGetStarted }: LandingProps) {
             className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white text-lg rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-lg"
           >
             <Zap className="w-6 h-6" />
-            Start Creating Now
+            View Pricing Plans
           </button>
         </div>
       </section>
@@ -145,7 +145,7 @@ export default function Landing({ onGetStarted }: LandingProps) {
             onClick={onGetStarted}
             className="inline-flex items-center gap-2 px-8 py-4 bg-blue-600 text-white text-lg rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-lg"
           >
-            Get Started Free
+            View Pricing Plans
           </button>
         </div>
       </section>

@@ -5,20 +5,27 @@ import { supabase } from '../lib/supabase';
 interface PricingProps {
   currentTier?: 'free' | 'pro' | 'premium';
   onBack?: () => void;
+  onAuthRequired?: (authType: 'login' | 'signup') => void;
 }
 
-export default function Pricing({ currentTier = 'free', onBack }: PricingProps) {
+export default function Pricing({ currentTier = 'free', onBack, onAuthRequired }: PricingProps) {
   const [loading, setLoading] = useState<string | null>(null);
 
   const handleUpgrade = async (planType: 'pro' | 'premium') => {
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      if (onAuthRequired) {
+        // If unauthenticated, redirect to login flow
+        onAuthRequired('signup');
+      } else {
+        alert('Please log in or sign up to upgrade.');
+      }
+      return;
+    }
+
     try {
       setLoading(planType);
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        alert('Please log in to upgrade');
-        return;
-      }
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`;
 
@@ -115,7 +122,7 @@ export default function Pricing({ currentTier = 'free', onBack }: PricingProps) 
             onClick={onBack}
             className="mb-6 text-blue-600 hover:text-blue-700 font-medium"
           >
-            ← Back to Dashboard
+            ← Back to {currentTier === 'free' ? 'Landing' : 'Dashboard'}
           </button>
         )}
 
@@ -131,8 +138,14 @@ export default function Pricing({ currentTier = 'free', onBack }: PricingProps) 
         <div className="grid md:grid-cols-3 gap-8 mb-16">
           {plans.map((plan) => {
             const isCurrentPlan = plan.type === currentTier;
+            const isFreePlan = plan.type === 'free';
             const canUpgrade = plan.type !== 'free' && !isCurrentPlan &&
               (currentTier === 'free' || (currentTier === 'pro' && plan.type === 'premium'));
+            
+            const ctaText = isCurrentPlan ? 'Current Plan' : 
+                            isFreePlan && !onAuthRequired ? 'Get Started' : // Logged in user on Free plan
+                            isFreePlan && onAuthRequired ? 'Sign Up / Login' : // Logged out user on Landing page
+                            plan.cta;
 
             return (
               <div
@@ -176,16 +189,20 @@ export default function Pricing({ currentTier = 'free', onBack }: PricingProps) 
                   </ul>
 
                   <button
-                    onClick={() => canUpgrade && handleUpgrade(plan.type as 'pro' | 'premium')}
-                    disabled={!canUpgrade || loading !== null}
+                    onClick={() => {
+                      if (onAuthRequired && !isCurrentPlan) {
+                        onAuthRequired('signup');
+                      } else if (canUpgrade) {
+                        handleUpgrade(plan.type as 'pro' | 'premium');
+                      }
+                    }}
+                    disabled={isCurrentPlan || (plan.type !== 'free' && loading !== null)}
                     className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
                       isCurrentPlan
                         ? 'bg-gray-200 text-gray-600 cursor-not-allowed'
-                        : canUpgrade
-                        ? plan.highlighted
-                          ? 'bg-blue-600 text-white hover:bg-blue-700'
-                          : 'bg-gray-900 text-white hover:bg-gray-800'
-                        : 'bg-gray-200 text-gray-600 cursor-not-allowed'
+                        : plan.highlighted
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-900 text-white hover:bg-gray-800'
                     }`}
                   >
                     {loading === plan.type ? (
@@ -193,15 +210,11 @@ export default function Pricing({ currentTier = 'free', onBack }: PricingProps) 
                         <Loader2 className="w-5 h-5 animate-spin" />
                         Processing...
                       </>
-                    ) : isCurrentPlan ? (
-                      'Current Plan'
-                    ) : canUpgrade ? (
-                      <>
-                        <Zap className="w-5 h-5" />
-                        {plan.cta}
-                      </>
                     ) : (
-                      'Not Available'
+                      <>
+                        {plan.type !== 'free' && <Zap className="w-5 h-5" />}
+                        {ctaText}
+                      </>
                     )}
                   </button>
                 </div>
