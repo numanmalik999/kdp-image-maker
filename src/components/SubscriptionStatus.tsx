@@ -21,6 +21,25 @@ interface SubscriptionStatusProps {
   onManageBilling: () => void;
 }
 
+const DEFAULT_FREE_LIMITS: SubscriptionData = {
+  subscription_tier: 'free',
+  books_limit: 2,
+  pages_per_book_limit: 20,
+  ai_credits_remaining: 20,
+};
+
+const getInitialUsage = (): UsageData => {
+  const now = new Date();
+  const periodEnd = new Date(now);
+  periodEnd.setDate(now.getDate() + 30); // Default 30 days for free tier
+  return {
+    books_created: 0,
+    pages_generated: 0,
+    images_generated: 0,
+    period_end: periodEnd.toISOString(),
+  };
+};
+
 export default function SubscriptionStatus({ onUpgrade, onManageBilling }: SubscriptionStatusProps) {
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [usage, setUsage] = useState<UsageData | null>(null);
@@ -43,6 +62,9 @@ export default function SubscriptionStatus({ onUpgrade, onManageBilling }: Subsc
 
       if (profile) {
         setSubscription(profile);
+      } else {
+        // Fallback if profile is somehow missing (shouldn't happen with trigger)
+        setSubscription(DEFAULT_FREE_LIMITS);
       }
 
       const { data: usageData } = await supabase
@@ -55,9 +77,15 @@ export default function SubscriptionStatus({ onUpgrade, onManageBilling }: Subsc
 
       if (usageData) {
         setUsage(usageData);
+      } else {
+        // If usage tracking is missing (e.g., new user), use default values
+        setUsage(getInitialUsage());
       }
     } catch (error) {
       console.error('Error loading subscription data:', error);
+      // Set default state on error to prevent infinite loading/null return
+      setSubscription(DEFAULT_FREE_LIMITS);
+      setUsage(getInitialUsage());
     } finally {
       setLoading(false);
     }
@@ -73,6 +101,7 @@ export default function SubscriptionStatus({ onUpgrade, onManageBilling }: Subsc
     );
   }
 
+  // If we reach here, subscription and usage should have been set, either from DB or defaults
   if (!subscription || !usage) {
     return null;
   }
@@ -90,6 +119,7 @@ export default function SubscriptionStatus({ onUpgrade, onManageBilling }: Subsc
   };
 
   const getProgressColor = (used: number, limit: number) => {
+    if (limit === 0) return 'bg-gray-400';
     const percentage = (used / limit) * 100;
     if (percentage >= 90) return 'bg-red-600';
     if (percentage >= 70) return 'bg-yellow-600';
@@ -108,6 +138,9 @@ export default function SubscriptionStatus({ onUpgrade, onManageBilling }: Subsc
   const aiCreditsUsed = subscription.ai_credits_remaining;
   const totalAiCredits = subscription.subscription_tier === 'free' ? 20 :
                          subscription.subscription_tier === 'pro' ? 200 : 1000;
+  
+  // Calculate AI credit usage percentage (inverted, as we track remaining)
+  const aiCreditsPercentage = ((totalAiCredits - aiCreditsUsed) / totalAiCredits) * 100;
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -170,7 +203,7 @@ export default function SubscriptionStatus({ onUpgrade, onManageBilling }: Subsc
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-sm font-medium text-gray-700">
                 <FileText className="w-4 h-4" />
-                <span>Pages Generated</span>
+                <span>Pages Generated (Total)</span>
               </div>
               <span className="text-sm text-gray-600">
                 {usage.pages_generated}
@@ -191,7 +224,7 @@ export default function SubscriptionStatus({ onUpgrade, onManageBilling }: Subsc
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
                 className={`h-2 rounded-full transition-all ${getProgressColor(totalAiCredits - aiCreditsUsed, totalAiCredits)}`}
-                style={{ width: `${(aiCreditsUsed / totalAiCredits) * 100}%` }}
+                style={{ width: `${Math.min(100 - aiCreditsPercentage, 100)}%` }}
               />
             </div>
           </div>
