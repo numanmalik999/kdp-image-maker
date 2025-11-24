@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Page } from '../../types';
-import { generateColoringImage } from '../../utils/aiGeneration';
+import { generateColoringImage, generatePageContent } from '../../utils/aiGeneration';
 import { supabase, Book } from '../../lib/supabase';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import SinglePageEditor from '../../components/SinglePageEditor';
@@ -28,10 +28,17 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
   const [toastMessage, setToastMessage] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
 
   useEffect(() => {
     loadBook();
+    loadSessionToken();
   }, [bookId]);
+
+  const loadSessionToken = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    setSessionToken(session?.access_token || null);
+  };
 
   const loadBook = async () => {
     try {
@@ -96,6 +103,11 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
   };
 
   const handleGeneratePage = async (pageNumber: number, activityType: string, prompt: string, model: string) => {
+    if (!sessionToken || !book) {
+      alert('Authentication required for AI generation.');
+      return;
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
@@ -112,12 +124,41 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         return;
       }
 
+      let content = '';
+      let imageUrl: string | undefined = undefined;
       const fullPrompt = `${activityType}: ${prompt}`;
-      const imageUrl = await generateColoringImage(fullPrompt, model, bookId);
 
-      await decrementAICredits(user.id);
-      await incrementImageCount(user.id);
-      await incrementPageCount(user.id);
+      if (model === 'Image & Text') {
+        // 1. Generate Image (DALL-E 3)
+        imageUrl = await generateColoringImage(fullPrompt, 'DALL-E 3', bookId, sessionToken);
+        await decrementAICredits(user.id);
+        await incrementImageCount(user.id);
+
+        // 2. Generate Text (GPT-4o)
+        content = await generatePageContent(
+          prompt,
+          pageNumber,
+          book.target_pages,
+          book.font_size,
+          sessionToken,
+          book.book_prompt || undefined
+        );
+        await decrementAICredits(user.id); // Assuming text generation also costs a credit
+        await incrementPageCount(user.id);
+
+      } else if (model === 'Gemini') {
+        // 1. Generate Text (GPT-4o, since Gemini function is currently text-only placeholder)
+        content = await generatePageContent(
+          prompt,
+          pageNumber,
+          book.target_pages,
+          book.font_size,
+          sessionToken,
+          book.book_prompt || undefined
+        );
+        await decrementAICredits(user.id);
+        await incrementPageCount(user.id);
+      }
 
       const updatedPages = [...pages];
       const pageIndex = updatedPages.findIndex(p => p.pageNumber === pageNumber);
@@ -125,14 +166,14 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       if (pageIndex >= 0) {
         updatedPages[pageIndex] = {
           ...updatedPages[pageIndex],
-          imageUrl,
-          content: prompt
+          imageUrl: imageUrl || updatedPages[pageIndex].imageUrl,
+          content: content || updatedPages[pageIndex].content
         };
       } else {
         updatedPages.push({
           id: `page-${pageNumber}`,
           pageNumber,
-          content: prompt,
+          content: content || prompt,
           imageUrl,
         });
       }
@@ -152,6 +193,11 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
   };
 
   const handleGenerateCover = async (type: 'front' | 'back', activityType: string, prompt: string, model: string) => {
+    if (!sessionToken || !book) {
+      alert('Authentication required for AI generation.');
+      return;
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
@@ -163,7 +209,9 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       }
 
       const fullPrompt = `${activityType}: ${prompt}`;
-      const imageUrl = await generateColoringImage(fullPrompt, model);
+      
+      // Covers only generate images for now
+      const imageUrl = await generateColoringImage(fullPrompt, model, bookId, sessionToken);
 
       await decrementAICredits(user.id);
       await incrementImageCount(user.id);

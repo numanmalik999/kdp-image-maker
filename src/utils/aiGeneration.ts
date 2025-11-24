@@ -1,5 +1,5 @@
 import { Chapter } from '../types';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/config';
+import { SUPABASE_URL } from '../lib/config'; // Removed SUPABASE_ANON_KEY import
 
 interface GeneratedContent {
   title: string;
@@ -13,14 +13,15 @@ export async function generateBookContent(
   prompt: string,
   targetPages: number,
   fontSize: number,
-  trimSize: string
+  trimSize: string,
+  token: string
 ): Promise<GeneratedContent> {
   const apiUrl = `${SUPABASE_URL}/functions/v1/generate-book-content`;
 
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -53,6 +54,7 @@ export async function generatePageContent(
   pageNumber: number,
   totalPages: number,
   fontSize: number,
+  token: string,
   bookContext?: string
 ): Promise<string> {
   const apiUrl = `${SUPABASE_URL}/functions/v1/generate-page-content`;
@@ -60,7 +62,7 @@ export async function generatePageContent(
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -81,7 +83,7 @@ export async function generatePageContent(
   return data.content;
 }
 
-export async function generateColoringImage(prompt: string, model: string = 'DALL-E 3', bookId?: string): Promise<string> {
+export async function generateColoringImage(prompt: string, model: string = 'DALL-E 3', bookId?: string, token?: string): Promise<string> {
   let functionName = 'generate-coloring-image';
 
   if (model === 'Gemini') {
@@ -93,7 +95,8 @@ export async function generateColoringImage(prompt: string, model: string = 'DAL
   const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      // Use token if provided, otherwise rely on function configuration (though this function should ideally be authenticated too)
+      'Authorization': `Bearer ${token || ''}`, 
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
