@@ -1,4 +1,5 @@
-import { createClient } from 'npm:@supabase/supabase-js@2';
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -48,6 +49,9 @@ Deno.serve(async (req: Request) => {
     }
 
     let syncedCount = 0;
+    const now = new Date();
+    const periodEnd = new Date(now);
+    periodEnd.setMonth(periodEnd.getMonth() + 1);
 
     for (const authUser of authUsers.users) {
       const { data: existingProfile } = await supabase
@@ -67,12 +71,27 @@ Deno.serve(async (req: Request) => {
           }]);
 
         if (!profileError) {
+          // 1. Create Subscription entry
           await supabase
             .from('subscriptions')
             .insert([{
               user_id: authUser.id,
               plan_type: 'free',
               status: 'active'
+            }])
+            .select()
+            .maybeSingle();
+
+          // 2. Create Usage Tracking entry
+          await supabase
+            .from('usage_tracking')
+            .insert([{
+              user_id: authUser.id,
+              books_created: 0,
+              pages_generated: 0,
+              images_generated: 0,
+              period_start: now.toISOString(),
+              period_end: periodEnd.toISOString(),
             }])
             .select()
             .maybeSingle();
