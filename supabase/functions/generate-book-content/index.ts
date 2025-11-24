@@ -22,7 +22,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { prompt, targetPages, fontSize, trimSize }: RequestBody = await req.json();
+    const { prompt, targetPages, fontSize }: RequestBody = await req.json();
 
     if (!prompt || !targetPages) {
       return new Response(

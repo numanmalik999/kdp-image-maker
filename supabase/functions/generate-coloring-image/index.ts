@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -83,7 +83,7 @@ Deno.serve(async (req: Request) => {
       const imageBlob = await imageResponse.blob();
       const fileName = `${bookId}/${Date.now()}.png`;
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("book-images")
         .upload(fileName, imageBlob, { contentType: "image/png" });
 
