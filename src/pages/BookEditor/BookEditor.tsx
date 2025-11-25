@@ -1,549 +1,96 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { ArrowLeft, Settings, Loader2 } from 'lucide-react';
-import { supabase } from '../../lib/supabase';
 import EditorArea from '../../components/EditorArea';
 import BookSettingsModal from '../../components/BookSettingsModal';
 import ExportModal from '../../components/ExportModal';
 import ImageEditorModal from '../../components/ImageEditorModal';
-import { BookSettings, Chapter, Page, TrimSize, FontSize } from '../../types';
+import { BookSettings, Chapter, Page } from '../../types';
 import { SAMPLE_CHAPTERS, SAMPLE_SINGLE_TEXT } from '../../utils/sampleContent';
-import { generateBookContent, convertToChapters, convertToSingleText, generatePageContent, generateColoringImage } from '../../utils/aiGeneration';
-import { checkAICredits, decrementAICredits, incrementPageCount, incrementImageCount, checkPageCreationLimit } from '../../utils/subscriptionLimits';
 import { generatePDF } from '../../utils/pdfGenerator';
 import { generateEPUB } from '../../utils/epubGenerator';
 import { SUPABASE_URL } from '../../lib/config';
 
-type EditorTab = 'single' | 'chapters' | 'pages' | 'front_cover' | 'back_cover';
+// Import new hooks
+import useBookData from '../../hooks/useBookData';
+import useBookPersistence from '../../hooks/useBookPersistence';
+import useBookGeneration from '../../hooks/useBookGeneration';
 
-// Define the structure of the book data fetched from Supabase
-interface BookData {
-  id: string;
-  title: string;
-  author: string | null;
-  trim_size: TrimSize;
-  font_size: FontSize;
-  target_pages: number;
-  status: 'draft' | 'generating' | 'complete';
-  book_prompt: string | null;
-  pages: Page[];
-  has_front_cover: boolean;
-  has_back_cover: boolean;
-}
+type EditorTab = 'single' | 'chapters' | 'pages' | 'front_cover' | 'back_cover';
 
 export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const { bookId } = useParams<{ bookId: string }>();
-  const [book, setBook] = useState<BookData | null>(null);
-  const [loading, setLoading] = useState(true);
+  
+  // --- UI State Management ---
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [activeTab, setActiveTab] = useState<EditorTab>('pages');
-  
-  // Content states
-  const [singleText, setSingleText] = useState('');
-  const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [pages, setPages] = useState<Page[]>([]);
-  
-  // New state for single page view
   const [currentPageNumber, setCurrentPageNumber] = useState(1);
 
+  // Content states (managed locally, updated by generation/persistence hooks)
+  const [singleText, setSingleText] = useState('');
+  const [chapters, setChapters] = useState<Chapter[]>([]);
+  
   // Modal states
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isImageEditorModalOpen, setIsImageEditorModalOpen] = useState(false);
   const [imageToEdit, setImageToEdit] = useState<{ src: string; pageNumber: number } | null>(null);
 
-  const loadBook = useCallback(async () => {
-    if (!bookId) return;
-    setLoading(true);
-    try {
-      const { data: bookData, error } = await supabase
-        .from('books')
-        .select(`
-          *,
-          pages:book_pages(*)
-        `)
-        .eq('id', bookId)
-        .order('page_number', { foreignTable: 'book_pages', ascending: true })
-        .maybeSingle();
+  // --- Hooks ---
+  const { book, pages, loading, setBook, setPages } = useBookData(bookId, onBack);
+  
+  const {
+    handleSaveSettings,
+    handleSavePageContent,
+    handleImageUpload,
+    handleDeletePage,
+    handleImageEditComplete,
+  } = useBookPersistence({
+    bookId: bookId || '',
+    book,
+    pages,
+    setBook,
+    setPages,
+    setIsSaving,
+  });
 
-      if (error) throw error;
-      if (!bookData) {
-        alert('Book not found.');
-        onBack();
-        return;
-      }
+  const {
+    handleAIGenerateBook,
+    handleGeneratePage,
+    handleGenerateImage,
+  } = useBookGeneration({
+    bookId: bookId || '',
+    book,
+    pages,
+    setBook,
+    setPages,
+    setChapters,
+    setSingleText,
+    setIsGeneratingAI,
+  });
 
-      setBook(bookData);
-      setPages(bookData.pages || []);
-      
-      // Ensure currentPageNumber is valid
-      if (bookData.target_pages > 0) {
-        setCurrentPageNumber(1);
-      }
-      
-    } catch (error: any) {
-      console.error('Error loading book:', error);
-      alert('Failed to load book data.');
-    } finally {
-      setLoading(false);
-    }
-  }, [bookId, onBack]);
-
+  // --- Effects ---
+  
+  // Set initial page number after book loads
   useEffect(() => {
-    loadBook();
-  }, [loadBook]);
+    if (book && book.target_pages > 0) {
+      setCurrentPageNumber(1);
+    }
+  }, [book]);
 
   // Handle tab change logic
   const handleTabChange = (tab: EditorTab) => {
     setActiveTab(tab);
-    if (tab === 'front_cover') {
-      setCurrentPageNumber(0); // Front cover is page 0
-    } else if (tab === 'back_cover') {
-      setCurrentPageNumber(book?.target_pages ? book.target_pages + 1 : 1); // Back cover is page N+1
-    } else if (tab === 'pages') {
-      setCurrentPageNumber(1); // Default to first content page
-    }
-  };
-
-  // --- Settings & Persistence ---
-
-  const handleSaveSettings = async (newSettings: BookSettings) => {
-    if (!bookId) return;
-    setIsSaving(true);
-    try {
-      const { error } = await supabase
-        .from('books')
-        .update({
-          title: newSettings.title,
-          author: newSettings.author,
-          trim_size: newSettings.trimSize,
-          font_size: newSettings.fontSize,
-          target_pages: newSettings.targetPages,
-        })
-        .eq('id', bookId);
-
-      if (error) throw error;
-      setBook(prev => prev ? { ...prev, ...newSettings } : null);
-      setIsSettingsModalOpen(false);
-      alert('Settings saved successfully!');
-    } catch (error: any) {
-      console.error('Error saving settings:', error);
-      alert('Failed to save settings.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // --- Page Persistence Handlers ---
-
-  const handleSavePageContent = async (pageNumber: number, content: string, activityTypes: string[]) => {
-    if (!bookId) return;
-    setIsSaving(true);
-    try {
-      const existingPage = pages.find(p => p.pageNumber === pageNumber);
-      
-      const isFrontCover = pageNumber === 0;
-      const isBackCover = book && pageNumber === book.target_pages + 1;
-      
-      const { error } = await supabase
-        .from('book_pages')
-        .upsert({
-          book_id: bookId,
-          page_number: pageNumber,
-          content: content,
-          activity_type: activityTypes[0] || 'story',
-          image_url: existingPage?.imageUrl,
-          is_front_cover: isFrontCover,
-          is_back_cover: isBackCover,
-        }, { onConflict: 'book_id, page_number' });
-
-      if (error) throw error;
-
-      // Update local state
-      setPages(prev => {
-        const index = prev.findIndex(p => p.pageNumber === pageNumber);
-        const newPage: Page = {
-          id: existingPage?.id || `temp-${pageNumber}`,
-          pageNumber,
-          content,
-          imageUrl: existingPage?.imageUrl,
-          activityTypes: existingPage?.activityTypes,
-        };
-
-        if (index >= 0) {
-          const newPages = [...prev];
-          newPages[index] = newPage;
-          return newPages;
-        } else {
-          return [...prev, newPage].sort((a, b) => a.pageNumber - b.pageNumber);
-        }
-      });
-      
-      // If saving a cover for the first time, update book status
-      if ((isFrontCover && !book?.has_front_cover) || (isBackCover && !book?.has_back_cover)) {
-        const updateData: Partial<BookData> = {};
-        if (isFrontCover) updateData.has_front_cover = true;
-        if (isBackCover) updateData.has_back_cover = true;
-        
-        await supabase.from('books').update(updateData).eq('id', bookId);
-        setBook(prev => prev ? { ...prev, ...updateData } as BookData : null);
+    if (book) {
+      if (tab === 'front_cover') {
+        setCurrentPageNumber(0); // Front cover is page 0
+      } else if (tab === 'back_cover') {
+        setCurrentPageNumber(book.target_pages + 1); // Back cover is page N+1
+      } else if (tab === 'pages') {
+        setCurrentPageNumber(1); // Default to first content page
       }
-
-      alert('Page content saved!');
-    } catch (error: any) {
-      console.error('Error saving page content:', error);
-      alert('Failed to save page content.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleImageUpload = async (pageNumber: number, file: File) => {
-    if (!bookId) return;
-    setIsSaving(true);
-    try {
-      const filename = `${bookId}/${pageNumber}-${Date.now()}-${file.name}`;
-
-      // 1. Upload the image file to Supabase Storage
-      const { error: uploadError } = await supabase.storage
-        .from('coloring_images')
-        .upload(filename, file, {
-          cacheControl: '3600',
-          upsert: true,
-          contentType: file.type,
-        });
-
-      if (uploadError) {
-        console.error('Storage Upload Error:', uploadError);
-        throw uploadError;
-      }
-
-      // 2. Get the public URL
-      const { data: publicUrlData } = supabase.storage
-        .from('coloring_images')
-        .getPublicUrl(filename);
-
-      const newImageUrl = publicUrlData.publicUrl;
-      const existingPage = pages.find(p => p.pageNumber === pageNumber);
-      const activityTypes = existingPage?.activityTypes || ['image'];
-      
-      const isFrontCover = pageNumber === 0;
-      const isBackCover = book && pageNumber === book.target_pages + 1;
-
-      // 3. Update the page in the database
-      const { error: dbError } = await supabase
-        .from('book_pages')
-        .upsert({
-          book_id: bookId,
-          page_number: pageNumber,
-          image_url: newImageUrl,
-          content: existingPage?.content || '',
-          activity_type: activityTypes[0] || 'image',
-          is_front_cover: isFrontCover,
-          is_back_cover: isBackCover,
-        }, { onConflict: 'book_id, page_number' });
-
-      if (dbError) {
-        console.error('Database Update Error:', dbError);
-        throw dbError;
-      }
-
-      // 4. Update local state
-      setPages(prev => {
-        const index = prev.findIndex(p => p.pageNumber === pageNumber);
-        const newPage: Page = {
-          id: existingPage?.id || `temp-${pageNumber}`,
-          pageNumber,
-          content: existingPage?.content || '',
-          imageUrl: newImageUrl,
-          activityTypes: existingPage?.activityTypes,
-        };
-
-        if (index >= 0) {
-          const newPages = [...prev];
-          newPages[index] = newPage;
-          return newPages;
-        } else {
-          return [...prev, newPage].sort((a, b) => a.pageNumber - b.pageNumber);
-        }
-      });
-      
-      // If saving a cover for the first time, update book status
-      if ((isFrontCover && !book?.has_front_cover) || (isBackCover && !book?.has_back_cover)) {
-        const updateData: Partial<BookData> = {};
-        if (isFrontCover) updateData.has_front_cover = true;
-        if (isBackCover) updateData.has_back_cover = true;
-        
-        await supabase.from('books').update(updateData).eq('id', bookId);
-        setBook(prev => prev ? { ...prev, ...updateData } as BookData : null);
-      }
-
-      alert('Image uploaded successfully!');
-    } catch (error: any) {
-      console.error('Image Upload Error:', error);
-      alert('Failed to upload image.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeletePage = async (pageNumber: number) => {
-    if (!bookId) return;
-    
-    const isFrontCover = pageNumber === 0;
-    const isBackCover = book && pageNumber === book.target_pages + 1;
-    
-    if (!confirm(`Are you sure you want to delete page ${pageNumber}?`)) return;
-
-    setIsSaving(true);
-    try {
-      const { error } = await supabase
-        .from('book_pages')
-        .delete()
-        .eq('book_id', bookId)
-        .eq('page_number', pageNumber);
-
-      if (error) throw error;
-
-      // Update local state
-      setPages(prev => prev.filter(p => p.pageNumber !== pageNumber));
-      
-      // If we deleted the current page, move to the previous one (or 1)
-      if (pageNumber === currentPageNumber) {
-        setCurrentPageNumber(prev => Math.max(1, prev - 1));
-      }
-      
-      // If deleting a cover, update book status
-      if (isFrontCover || isBackCover) {
-        const updateData: Partial<BookData> = {};
-        if (isFrontCover) updateData.has_front_cover = false;
-        if (isBackCover) updateData.has_back_cover = false;
-        
-        await supabase.from('books').update(updateData).eq('id', bookId);
-        setBook(prev => prev ? { ...prev, ...updateData } as BookData : null);
-        
-        // Switch tab back to pages
-        setActiveTab('pages');
-      }
-
-      alert(`Page ${pageNumber} deleted successfully!`);
-    } catch (error: any) {
-      console.error('Error deleting page:', error);
-      alert('Failed to delete page.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // --- AI Generation (Image/Content) ---
-  
-  // ... (handleAIGenerateBook, handleGeneratePage, handleGenerateImage remain the same) ...
-
-  const handleAIGenerateBook = async (prompt: string) => {
-    if (!book || !bookId) return;
-    setIsGeneratingAI(true);
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      alert('Please log in to use AI generation.');
-      setIsGeneratingAI(false);
-      return;
-    }
-
-    const creditCheck = await checkAICredits(session.user.id);
-    if (!creditCheck.allowed) {
-      alert(creditCheck.message);
-      setIsGeneratingAI(false);
-      return;
-    }
-
-    try {
-      // 1. Generate content
-      const generatedContent = await generateBookContent(
-        prompt,
-        book.target_pages,
-        book.font_size,
-        book.trim_size,
-        session.access_token
-      );
-
-      // 2. Update book prompt and title
-      await supabase
-        .from('books')
-        .update({
-          book_prompt: prompt,
-          title: generatedContent.title,
-        })
-        .eq('id', bookId);
-
-      setBook(prev => prev ? { ...prev, book_prompt: prompt, title: generatedContent.title } : null);
-
-      // 3. Update content states
-      const newChapters = convertToChapters(generatedContent);
-      setChapters(newChapters);
-      setSingleText(convertToSingleText(generatedContent));
-      
-      // 4. Decrement credits
-      await decrementAICredits(session.user.id);
-
-      alert('Book content generated successfully!');
-    } catch (error: any) {
-      console.error('AI Generation Error:', error);
-      alert(`AI Generation Failed: ${error.message}`);
-    } finally {
-      setIsGeneratingAI(false);
-    }
-  };
-
-  const handleGeneratePage = async (pageNumber: number, prompt: string) => {
-    if (!book || !bookId) return;
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      alert('Please log in to use AI generation.');
-      return;
-    }
-
-    const creditCheck = await checkAICredits(session.user.id);
-    if (!creditCheck.allowed) {
-      alert(creditCheck.message);
-      return;
-    }
-
-    try {
-      const pageLimitCheck = await checkPageCreationLimit(session.user.id, bookId);
-      if (!pageLimitCheck.allowed) {
-        alert(pageLimitCheck.message);
-        return;
-      }
-
-      const existingPage = pages.find(p => p.pageNumber === pageNumber);
-      const activityTypes = existingPage?.activityTypes || ['story']; // Default to story if generating text
-
-      const content = await generatePageContent(
-        prompt,
-        pageNumber,
-        book.target_pages,
-        book.font_size,
-        session.access_token,
-        book.book_prompt || undefined,
-        activityTypes
-      );
-
-      // Save to DB
-      const { error } = await supabase
-        .from('book_pages')
-        .upsert({
-          book_id: bookId,
-          page_number: pageNumber,
-          content: content,
-          activity_type: activityTypes[0] || 'story', // Use first activity type for DB column
-          image_url: existingPage?.imageUrl,
-        }, { onConflict: 'book_id, page_number' });
-
-      if (error) throw error;
-
-      // Update local state
-      setPages(prev => {
-        const index = prev.findIndex(p => p.pageNumber === pageNumber);
-        const newPage: Page = {
-          id: existingPage?.id || `temp-${pageNumber}`,
-          pageNumber,
-          content,
-          imageUrl: existingPage?.imageUrl,
-          activityTypes: existingPage?.activityTypes,
-        };
-
-        if (index >= 0) {
-          const newPages = [...prev];
-          newPages[index] = newPage;
-          return newPages;
-        } else {
-          return [...prev, newPage].sort((a, b) => a.pageNumber - b.pageNumber);
-        }
-      });
-      
-      // Decrement credits and increment page count
-      await decrementAICredits(session.user.id);
-      await incrementPageCount(session.user.id);
-
-    } catch (error: any) {
-      console.error('Page Generation Error:', error);
-      alert(`Page Generation Failed: ${error.message}`);
-    }
-  };
-
-  const handleGenerateImage = async (pageNumber: number, prompt: string) => {
-    if (!book || !bookId) return;
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      alert('Please log in to use AI generation.');
-      return;
-    }
-
-    const creditCheck = await checkAICredits(session.user.id);
-    if (!creditCheck.allowed) {
-      alert(creditCheck.message);
-      return;
-    }
-
-    try {
-      const existingPage = pages.find(p => p.pageNumber === pageNumber);
-      const activityTypes = existingPage?.activityTypes || ['coloring'];
-      const tracingWord = activityTypes.includes('tracing') ? prompt.split(' ')[0] : undefined;
-
-      const imageUrl = await generateColoringImage(
-        prompt,
-        'DALL-E 3',
-        bookId,
-        session.access_token,
-        activityTypes,
-        tracingWord
-      );
-
-      // Save to DB
-      const { error } = await supabase
-        .from('book_pages')
-        .upsert({
-          book_id: bookId,
-          page_number: pageNumber,
-          image_url: imageUrl,
-          content: existingPage?.content || '',
-          activity_type: activityTypes[0] || 'coloring',
-        }, { onConflict: 'book_id, page_number' });
-
-      if (error) throw error;
-
-      // Update local state
-      setPages(prev => {
-        const index = prev.findIndex(p => p.pageNumber === pageNumber);
-        const newPage: Page = {
-          id: existingPage?.id || `temp-${pageNumber}`,
-          pageNumber,
-          content: existingPage?.content || '',
-          imageUrl,
-          activityTypes: existingPage?.activityTypes,
-        };
-
-        if (index >= 0) {
-          const newPages = [...prev];
-          newPages[index] = newPage;
-          return newPages;
-        } else {
-          return [...prev, newPage].sort((a, b) => a.pageNumber - b.pageNumber);
-        }
-      });
-      
-      // Decrement credits and increment image count
-      await decrementAICredits(session.user.id);
-      await incrementImageCount(session.user.id);
-
-    } catch (error: any) {
-      console.error('Image Generation Error:', error);
-      alert(`Image Generation Failed: ${error.message}`);
     }
   };
 
@@ -551,8 +98,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
 
   const handlePagesChange = (newPages: Page[]) => {
     setPages(newPages);
-    // Note: Persistence to DB for individual page edits is handled within PagesEditor or on final export/save.
-    // For now, we rely on the AI generation functions to handle DB upserts.
   };
 
   const handleInsertSample = () => {
@@ -573,8 +118,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     if (!book) return;
     setIsExporting(true);
     try {
-      // Ensure all pages are saved to the DB before generating PDF
-      // (Skipping complex DB sync for now, relying on current state)
       await generatePDF(book, pages);
       alert('PDF generation initiated. Check your downloads!');
     } catch (error: any) {
@@ -609,7 +152,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   // --- Image Editing ---
 
   const handleEditImage = (pageNumber: number) => {
-    const page = pages.find(p => p.pageNumber === pageNumber);
+    const page = pages.find((p: Page) => p.pageNumber === pageNumber);
     if (page?.imageUrl) {
       // Proxy the image URL through the edge function to avoid CORS issues during canvas manipulation
       const proxiedUrl = `${SUPABASE_URL}/functions/v1/proxy-image?url=${encodeURIComponent(page.imageUrl)}`;
@@ -620,56 +163,21 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     }
   };
 
-  const handleImageEditComplete = async (editedImageBlob: Blob) => {
-    if (!imageToEdit || !bookId) return;
-    
-    setIsSaving(true);
-    try {
-      const pageNumber = imageToEdit.pageNumber;
-      const filename = `${bookId}/${pageNumber}-${Date.now()}.png`;
-
-      // 1. Upload the new image blob to Supabase Storage
-      const { data: _uploadData, error: uploadError } = await supabase.storage
-        .from('coloring_images')
-        .upload(filename, editedImageBlob, {
-          cacheControl: '3600',
-          upsert: true,
-          contentType: 'image/png',
-        });
-
-      if (uploadError) throw uploadError;
-
-      // 2. Get the public URL
-      const { data: publicUrlData } = supabase.storage
-        .from('coloring_images')
-        .getPublicUrl(filename);
-
-      const newImageUrl = publicUrlData.publicUrl;
-
-      // 3. Update the page in the database
-      const { error: dbError } = await supabase
-        .from('book_pages')
-        .update({ image_url: newImageUrl })
-        .eq('book_id', bookId)
-        .eq('page_number', pageNumber);
-
-      if (dbError) throw dbError;
-
-      // 4. Update local state
-      setPages(prev => prev.map(p => 
-        p.pageNumber === pageNumber ? { ...p, imageUrl: newImageUrl } : p
-      ));
-
-      alert('Image saved successfully!');
-      setIsImageEditorModalOpen(false);
-      setImageToEdit(null);
-    } catch (error: any) {
-      console.error('Image Edit Save Error:', error);
-      alert('Failed to save edited image.');
-    } finally {
-      setIsSaving(false);
-    }
+  // Wrappers to pass modal setters to persistence hook
+  const handleImageEditCompleteWrapper = async (editedImageBlob: Blob) => {
+    if (!imageToEdit) return;
+    await handleImageEditComplete(
+      editedImageBlob, 
+      imageToEdit.pageNumber, 
+      setImageToEdit, 
+      setIsImageEditorModalOpen
+    );
   };
+  
+  const handleDeletePageWrapper = async (pageNumber: number) => {
+    await handleDeletePage(pageNumber, setCurrentPageNumber, setActiveTab);
+  };
+
 
   if (loading) {
     return (
@@ -740,7 +248,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           onPageChange={setCurrentPageNumber}
           onSavePageContent={handleSavePageContent}
           onImageUpload={handleImageUpload}
-          onDeletePage={handleDeletePage}
+          onDeletePage={handleDeletePageWrapper}
           isSaving={isSaving}
         />
       </div>
@@ -771,7 +279,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           isOpen={isImageEditorModalOpen}
           onClose={() => setIsImageEditorModalOpen(false)}
           src={imageToEdit.src}
-          onEditComplete={handleImageEditComplete}
+          onEditComplete={handleImageEditCompleteWrapper}
           isProcessing={isSaving}
         />
       )}
