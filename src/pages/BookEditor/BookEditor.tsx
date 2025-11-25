@@ -6,7 +6,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import SinglePageEditor from '../../components/SinglePageEditor';
 import ExportModal from '../../components/ExportModal';
 import BookSettingsModal from '../../components/BookSettingsModal';
-import ImageCropModal from '../../components/ImageCropModal';
+import ImageEditorModal from '../../components/ImageEditorModal'; // Updated import
 import { generatePDF } from '../../utils/pdfGenerator';
 import { checkAICredits, decrementAICredits, incrementImageCount, checkPageCreationLimit, incrementPageCount } from '../../utils/subscriptionLimits';
 
@@ -333,26 +333,29 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     setShowCropModal(true);
   };
 
-  const handleCropComplete = async (croppedImageBlob: Blob) => {
+  // Renamed from handleCropComplete to handleEditComplete
+  const handleEditComplete = async (editedImageBlob: Blob) => {
     if (!book) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      // Upload the cropped blob back to storage
+      setSaving(true); // Set saving state while uploading the edited image
+
+      // Upload the edited blob back to storage
       let fileName: string;
       if (viewMode === 'front-cover') {
-        fileName = `${bookId}/front-cover-cropped-${Date.now()}.png`;
+        fileName = `${bookId}/front-cover-edited-${Date.now()}.png`;
       } else if (viewMode === 'back-cover') {
-        fileName = `${bookId}/back-cover-cropped-${Date.now()}.png`;
+        fileName = `${bookId}/back-cover-edited-${Date.now()}.png`;
       } else {
-        fileName = `${bookId}/page-${currentPage}-cropped-${Date.now()}.png`;
+        fileName = `${bookId}/page-${currentPage}-edited-${Date.now()}.png`;
       }
 
       const { data, error } = await supabase.storage
         .from('book-images')
-        .upload(fileName, croppedImageBlob, {
+        .upload(fileName, editedImageBlob, {
           cacheControl: '3600',
           upsert: false,
         });
@@ -365,7 +368,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
 
       const newImageUrl = publicUrlData.publicUrl;
 
-      // Update the current page/cover with the new cropped image URL
+      // Update the current page/cover with the new edited image URL
       if (viewMode === 'front-cover') {
         setFrontCover(prev => prev ? { ...prev, imageUrl: newImageUrl } : null);
       } else if (viewMode === 'back-cover') {
@@ -374,15 +377,16 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         updatePageData(currentPage, { imageUrl: newImageUrl });
       }
 
-      setToastMessage('Image cropped and updated successfully!');
+      setToastMessage('Image edited and updated successfully!');
       setShowToast(true);
       setTimeout(() => setShowToast(false), 2000);
     } catch (error) {
-      console.error('Error cropping and uploading image:', error);
-      alert('Failed to crop and save image.');
+      console.error('Error editing and uploading image:', error);
+      alert('Failed to edit and save image.');
     } finally {
       setImageToCrop(null);
       setShowCropModal(false);
+      setSaving(false);
     }
   };
 
@@ -849,14 +853,14 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       />
 
       {imageToCrop && (
-        <ImageCropModal
+        <ImageEditorModal
           isOpen={showCropModal}
           onClose={() => {
             setShowCropModal(false);
             setImageToCrop(null);
           }}
           src={imageToCrop}
-          onCropComplete={handleCropComplete}
+          onEditComplete={handleEditComplete} // Updated handler name
           isProcessing={saving}
         />
       )}
