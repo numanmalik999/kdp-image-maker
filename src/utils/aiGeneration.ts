@@ -1,7 +1,7 @@
 import { Chapter, PageActivityType } from '../types';
-import { SUPABASE_URL } from '../lib/config'; // Removed SUPABASE_ANON_KEY import
+import { SUPABASE_URL } from '../lib/config';
 
-interface GeneratedContent {
+export interface GeneratedContent {
   title: string;
   chapters: Array<{
     title: string;
@@ -17,33 +17,26 @@ export async function generateBookContent(
   token: string
 ): Promise<GeneratedContent> {
   const apiUrl = `${SUPABASE_URL}/functions/v1/generate-book-content`;
-
-  const response = await fetch(apiUrl, {
+  const res = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      prompt,
-      targetPages,
-      fontSize,
-      trimSize,
-    }),
+    body: JSON.stringify({ prompt, targetPages, fontSize, trimSize }),
   });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(errorData.error || 'Failed to generate content');
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err || 'Failed to generate book content');
   }
 
-  const data = await response.json();
-  return data;
+  return await res.json() as GeneratedContent;
 }
 
-export function convertToChapters(generatedContent: GeneratedContent): Chapter[] {
-  return generatedContent.chapters.map((chapter, index) => ({
-    id: `${Date.now()}-${index}`,
+export function convertToChapters(generatedContent: GeneratedContent): { id: string; title: string; content: string }[] {
+  return generatedContent.chapters.map((chapter, idx) => ({
+    id: `${Date.now()}-${idx}`,
     title: chapter.title,
     content: chapter.content,
   }));
@@ -56,11 +49,10 @@ export async function generatePageContent(
   fontSize: number,
   token: string,
   bookContext?: string,
-  activityTypes?: PageActivityType[] // Updated to array
+  activityTypes?: PageActivityType[]
 ): Promise<string> {
   const apiUrl = `${SUPABASE_URL}/functions/v1/generate-page-content`;
-
-  const response = await fetch(apiUrl, {
+  const res = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -72,59 +64,59 @@ export async function generatePageContent(
       totalPages,
       fontSize,
       bookContext,
-      activityTypes, // Passed array of activity types to Edge Function
+      activityTypes,
     }),
   });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(errorData.error || 'Failed to generate page content');
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err || 'Failed to generate page content');
   }
 
-  const data = await response.json();
+  const data = await res.json();
   return data.content;
 }
 
 export async function generateColoringImage(
-  prompt: string, 
-  model: string = 'DALL-E 3', 
-  bookId?: string, 
+  prompt: string,
+  model: string = 'DALL-E 3',
+  bookId?: string,
   token?: string,
-  activityTypes?: PageActivityType[] // Updated to array
+  activityTypes?: PageActivityType[],
+  tracingWord?: string
 ): Promise<string> {
-  let functionName = 'generate-coloring-image';
+  const apiUrl = `${SUPABASE_URL}/functions/v1/generate-coloring-image`;
 
-  if (model === 'Gemini') {
-    throw new Error('Gemini does not support direct image generation. Please use DALL-E 3 for coloring page images.');
-  }
+  const tracingNote = tracingWord && tracingWord.trim()
+    ? ` Include the tracing word '${tracingWord}' in large bold letters at the bottom of the image for tracing practice.`
+    : '';
 
-  const apiUrl = `${SUPABASE_URL}/functions/v1/${functionName}`;
+  const enhancedPrompt = `A coloring image. Subject: ${prompt}.` + tracingNote;
 
-  const response = await fetch(apiUrl, {
+  const res = await fetch(apiUrl, {
     method: 'POST',
     headers: {
-      // Use token if provided, otherwise rely on function configuration (though this function should ideally be authenticated too)
-      'Authorization': `Bearer ${token || ''}`, 
       'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token || ''}`,
     },
     body: JSON.stringify({
-      prompt,
+      prompt: enhancedPrompt,
+      model,
       bookId,
-      activityTypes, // Passed array of activity types to Edge Function
+      activityTypes,
+      tracingWord,
     }),
   });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(errorData.error || 'Failed to generate image');
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err || 'Failed to generate image');
   }
 
-  const data = await response.json();
+  const data = await res.json();
   return data.imageUrl;
 }
 
 export function convertToSingleText(generatedContent: GeneratedContent): string {
-  return generatedContent.chapters
-    .map(chapter => `${chapter.title}\n\n${chapter.content}`)
-    .join('\n\n\n');
+  return generatedContent.chapters.map(ch => `${ch.title}\n\n${ch.content}`).join('\n\n\n');
 }
