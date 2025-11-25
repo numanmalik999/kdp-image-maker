@@ -215,7 +215,10 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           contentType: file.type,
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Storage Upload Error:', uploadError);
+        throw uploadError;
+      }
 
       // 2. Get the public URL
       const { data: publicUrlData } = supabase.storage
@@ -242,7 +245,10 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           is_back_cover: isBackCover,
         }, { onConflict: 'book_id, page_number' });
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error('Database Update Error:', dbError);
+        throw dbError;
+      }
 
       // 4. Update local state
       setPages(prev => {
