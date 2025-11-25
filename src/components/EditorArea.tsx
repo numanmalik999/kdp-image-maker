@@ -1,9 +1,11 @@
 import { Chapter, Page } from '../types';
-import { FileText, BookOpen, Download, FileStack } from 'lucide-react';
+import { FileText, BookOpen, Download, FileStack, BookOpenCheck, BookOpenText } from 'lucide-react';
 import SingleTextEditor from './SingleTextEditor';
 import ChaptersEditor from './ChaptersEditor';
 import PagesEditor from './PagesEditor';
 import { countWords, estimatePages } from '../utils/textUtils';
+
+type EditorTab = 'single' | 'chapters' | 'pages' | 'front_cover' | 'back_cover';
 
 interface EditorAreaProps {
   singleText: string;
@@ -18,8 +20,8 @@ interface EditorAreaProps {
   fontSize: number;
   onGeneratePDF: () => void;
   isGenerating: boolean;
-  activeTab: 'single' | 'chapters' | 'pages';
-  onTabChange: (tab: 'single' | 'chapters' | 'pages') => void;
+  activeTab: EditorTab;
+  onTabChange: (tab: EditorTab) => void;
   targetPages: number;
   bookPrompt: string;
   currentPageNumber: number;
@@ -64,25 +66,49 @@ export default function EditorArea({
 
   const estimatedPages = estimatePages(totalWords, fontSize);
 
+  const isCoverTab = activeTab === 'front_cover' || activeTab === 'back_cover';
+
   return (
     <div className="flex-1 flex flex-col bg-gray-50">
       <div className="bg-white border-b border-gray-200">
         <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex gap-2">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             <button
-              onClick={() => onTabChange('single')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                activeTab === 'single'
+              onClick={() => onTabChange('front_cover')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
+                activeTab === 'front_cover'
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              <FileText className="w-4 h-4" />
-              Single Text
+              <BookOpenCheck className="w-4 h-4" />
+              Front Cover
+            </button>
+            <button
+              onClick={() => onTabChange('pages')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
+                activeTab === 'pages'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <FileStack className="w-4 h-4" />
+              Pages
+            </button>
+            <button
+              onClick={() => onTabChange('back_cover')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
+                activeTab === 'back_cover'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              <BookOpenText className="w-4 h-4" />
+              Back Cover
             </button>
             <button
               onClick={() => onTabChange('chapters')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
                 activeTab === 'chapters'
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -92,21 +118,21 @@ export default function EditorArea({
               Chapters
             </button>
             <button
-              onClick={() => onTabChange('pages')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                activeTab === 'pages'
+              onClick={() => onTabChange('single')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
+                activeTab === 'single'
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              <FileStack className="w-4 h-4" />
-              Pages
+              <FileText className="w-4 h-4" />
+              Single Text
             </button>
           </div>
           <button
             onClick={onGeneratePDF}
             disabled={isGenerating || totalWords === 0}
-            className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex-shrink-0 ml-4"
           >
             <Download className="w-5 h-5" />
             {isGenerating ? 'Generating...' : 'Generate KDP PDF'}
@@ -128,14 +154,15 @@ export default function EditorArea({
                 onGeneratePage={onGeneratePage}
                 onGenerateImage={onGenerateImage}
                 onEditImage={onEditImage}
-                totalPages={targetPages}
                 bookPrompt={bookPrompt}
-                currentPageNumber={currentPageNumber}
+                currentPageNumber={isCoverTab ? (activeTab === 'front_cover' ? 0 : targetPages + 1) : currentPageNumber}
                 onPageChange={onPageChange}
                 onSavePageContent={onSavePageContent}
                 onImageUpload={onImageUpload}
                 onDeletePage={onDeletePage}
                 isSaving={isSaving}
+                isCoverPage={isCoverTab}
+                maxPageNumber={targetPages}
               />
             )}
           </div>

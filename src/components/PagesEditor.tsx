@@ -8,7 +8,6 @@ interface PagesEditorProps {
   onGeneratePage: (pageNumber: number, prompt: string) => Promise<void>;
   onGenerateImage: (pageNumber: number, prompt: string) => Promise<void>;
   onEditImage: (pageNumber: number) => void;
-  totalPages: number;
   bookPrompt: string;
   currentPageNumber: number;
   onPageChange: (newPageNumber: number) => void;
@@ -16,6 +15,8 @@ interface PagesEditorProps {
   onImageUpload: (pageNumber: number, file: File) => Promise<void>;
   onDeletePage: (pageNumber: number) => Promise<void>;
   isSaving: boolean;
+  isCoverPage: boolean;
+  maxPageNumber: number;
 }
 
 const ACTIVITY_OPTIONS: { value: PageActivityType; label: string }[] = [
@@ -33,7 +34,6 @@ export default function PagesEditor({
   onGeneratePage, 
   onGenerateImage, 
   onEditImage, 
-  totalPages, 
   bookPrompt,
   currentPageNumber,
   onPageChange,
@@ -41,6 +41,8 @@ export default function PagesEditor({
   onImageUpload,
   onDeletePage,
   isSaving,
+  isCoverPage,
+  maxPageNumber,
 }: PagesEditorProps) {
   
   const existingPage = pages.find(p => p.pageNumber === currentPageNumber);
@@ -64,14 +66,16 @@ export default function PagesEditor({
     id: `temp-${currentPageNumber}`,
     pageNumber: currentPageNumber,
     content: localContent,
-    activityTypes: ['coloring'],
+    activityTypes: isCoverPage ? ['image'] : ['coloring'], // Default cover to image
   };
 
-  const currentActivities = currentPage.activityTypes || ['coloring'];
+  const currentActivities = currentPage.activityTypes || (isCoverPage ? ['image'] : ['coloring']);
   const hasTextActivity = currentActivities.includes('story') || currentActivities.includes('tracing');
   const hasImageActivity = currentActivities.includes('coloring') || currentActivities.includes('maze') || currentActivities.includes('dot-to-dot') || currentActivities.includes('image');
 
   const updatePageActivities = (activity: PageActivityType) => {
+    if (isCoverPage) return; // Covers cannot change activity type
+
     let newActivities: PageActivityType[];
     
     if (currentActivities.includes(activity)) {
@@ -105,12 +109,17 @@ export default function PagesEditor({
 
     setIsGenerating(true);
     try {
-      // We run both generation types sequentially if both activities are selected
-      if (hasTextActivity) {
-        await onGeneratePage(currentPageNumber, prompt);
-      }
-      if (hasImageActivity) {
+      // Covers only generate images
+      if (isCoverPage) {
         await onGenerateImage(currentPageNumber, prompt);
+      } else {
+        // Content pages run both generation types sequentially if both activities are selected
+        if (hasTextActivity) {
+          await onGeneratePage(currentPageNumber, prompt);
+        }
+        if (hasImageActivity) {
+          await onGenerateImage(currentPageNumber, prompt);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -153,7 +162,7 @@ export default function PagesEditor({
   };
 
   const handleNext = () => {
-    if (currentPageNumber < totalPages) {
+    if (currentPageNumber >= 1 && currentPageNumber < maxPageNumber) {
       onPageChange(currentPageNumber + 1);
     }
   };
@@ -163,35 +172,51 @@ export default function PagesEditor({
       onPageChange(currentPageNumber - 1);
     }
   };
+  
+  const pageTitle = isCoverPage 
+    ? (currentPageNumber === 0 ? 'Front Cover' : 'Back Cover')
+    : `Page ${currentPageNumber}`;
+    
+  // totalDisplayPages removed
 
-  const renderActivitySelector = () => (
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">Activity Type:</label>
-      <div className="flex flex-wrap gap-2">
-        {ACTIVITY_OPTIONS.map(option => (
-          <button
-            key={option.value}
-            onClick={() => updatePageActivities(option.value)}
-            className={`px-3 py-1 text-sm rounded-lg transition-colors ${
-              currentActivities.includes(option.value)
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-            disabled={isGenerating || isSaving}
-          >
-            {option.label}
-          </button>
-        ))}
+  const renderActivitySelector = () => {
+    if (isCoverPage) {
+      return (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+          Covers are automatically set to 'Image' activity type.
+        </div>
+      );
+    }
+    
+    return (
+      <div className="mb-4">
+        <label className="block text-sm font-medium text-gray-700 mb-1">Activity Type:</label>
+        <div className="flex flex-wrap gap-2">
+          {ACTIVITY_OPTIONS.map(option => (
+            <button
+              key={option.value}
+              onClick={() => updatePageActivities(option.value)}
+              className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                currentActivities.includes(option.value)
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+              disabled={isGenerating || isSaving}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderPreview = () => {
     if (isGenerating) {
       return (
         <div className="flex flex-col items-center justify-center h-full bg-gray-100 rounded-lg">
           <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
-          <p className="text-lg font-medium text-gray-700">Generating Page {currentPageNumber}...</p>
+          <p className="text-lg font-medium text-gray-700">Generating {pageTitle}...</p>
           <p className="text-sm text-gray-500 mt-1">This may take a moment.</p>
         </div>
       );
@@ -206,7 +231,7 @@ export default function PagesEditor({
             <div className="relative mb-4 border border-gray-300 rounded-lg overflow-hidden">
               <img 
                 src={currentPage.imageUrl} 
-                alt={`Page ${currentPageNumber} image`} 
+                alt={`${pageTitle} image`} 
                 className="w-full h-auto object-contain"
               />
               <button
@@ -234,7 +259,7 @@ export default function PagesEditor({
     return (
       <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
         <Pencil className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-xl font-medium mb-2">Page {currentPageNumber}: Ready to Generate</h3>
+        <h3 className="text-xl font-medium mb-2">{pageTitle}: Ready to Generate</h3>
         <p>Enter your prompt and click 'Generate' to begin!</p>
       </div>
     );
@@ -244,13 +269,13 @@ export default function PagesEditor({
     <div className="h-full grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden">
       {/* Left Sidebar (Controls) */}
       <div className="lg:col-span-1 flex flex-col bg-white p-6 border border-gray-200 rounded-lg shadow-sm overflow-y-auto">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Page {currentPageNumber} of {totalPages}</h2>
+        <h2 className="text-xl font-bold text-gray-900 mb-4">{pageTitle}</h2>
 
         {renderActivitySelector()}
 
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Prompt for Page {currentPageNumber}
+            Prompt for {pageTitle}
           </label>
           <textarea
             value={pagePrompt}
@@ -275,7 +300,7 @@ export default function PagesEditor({
           ) : (
             <>
               <Sparkles className="w-5 h-5" />
-              Generate Page {currentPageNumber}
+              Generate {pageTitle}
             </>
           )}
         </button>
@@ -314,32 +339,34 @@ export default function PagesEditor({
             className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Trash2 className="w-4 h-4" />
-            Delete Page
+            Delete {isCoverPage ? 'Cover' : 'Page'}
           </button>
         </div>
 
-        {/* Navigation */}
-        <div className="flex justify-between items-center pt-4 border-t border-gray-100 mt-auto">
-          <button
-            onClick={handlePrevious}
-            disabled={currentPageNumber <= 1 || isGenerating || isSaving}
-            className="flex items-center gap-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            Previous Page
-          </button>
-          <div className="text-sm text-gray-600">
-            Book Progress: {pages.length} Pages
+        {/* Navigation (Only for content pages) */}
+        {!isCoverPage && (
+          <div className="flex justify-between items-center pt-4 border-t border-gray-100 mt-auto">
+            <button
+              onClick={handlePrevious}
+              disabled={currentPageNumber <= 1 || isGenerating || isSaving}
+              className="flex items-center gap-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Previous Page
+            </button>
+            <div className="text-sm text-gray-600">
+              Book Progress: {pages.filter(p => p.pageNumber > 0 && p.pageNumber <= maxPageNumber).length} / {maxPageNumber}
+            </div>
+            <button
+              onClick={handleNext}
+              disabled={currentPageNumber >= maxPageNumber || isGenerating || isSaving}
+              className="flex items-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+            >
+              Next Page
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={handleNext}
-            disabled={currentPageNumber >= totalPages || isGenerating || isSaving}
-            className="flex items-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
-          >
-            Next Page
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+        )}
       </div>
 
       {/* Right Content Area (Preview) */}

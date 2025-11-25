@@ -14,6 +14,8 @@ import { generatePDF } from '../../utils/pdfGenerator';
 import { generateEPUB } from '../../utils/epubGenerator';
 import { SUPABASE_URL } from '../../lib/config';
 
+type EditorTab = 'single' | 'chapters' | 'pages' | 'front_cover' | 'back_cover';
+
 // Define the structure of the book data fetched from Supabase
 interface BookData {
   id: string;
@@ -25,6 +27,8 @@ interface BookData {
   status: 'draft' | 'generating' | 'complete';
   book_prompt: string | null;
   pages: Page[];
+  has_front_cover: boolean;
+  has_back_cover: boolean;
 }
 
 export default function BookEditor({ onBack }: { onBack: () => void; }) {
@@ -34,7 +38,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'single' | 'chapters' | 'pages'>('pages');
+  const [activeTab, setActiveTab] = useState<EditorTab>('pages');
   
   // Content states
   const [singleText, setSingleText] = useState('');
@@ -91,6 +95,18 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     loadBook();
   }, [loadBook]);
 
+  // Handle tab change logic
+  const handleTabChange = (tab: EditorTab) => {
+    setActiveTab(tab);
+    if (tab === 'front_cover') {
+      setCurrentPageNumber(0); // Front cover is page 0
+    } else if (tab === 'back_cover') {
+      setCurrentPageNumber(book?.target_pages ? book.target_pages + 1 : 1); // Back cover is page N+1
+    } else if (tab === 'pages') {
+      setCurrentPageNumber(1); // Default to first content page
+    }
+  };
+
   // --- Settings & Persistence ---
 
   const handleSaveSettings = async (newSettings: BookSettings) => {
@@ -128,6 +144,9 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     try {
       const existingPage = pages.find(p => p.pageNumber === pageNumber);
       
+      const isFrontCover = pageNumber === 0;
+      const isBackCover = book && pageNumber === book.target_pages + 1;
+      
       const { error } = await supabase
         .from('book_pages')
         .upsert({
@@ -136,6 +155,8 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           content: content,
           activity_type: activityTypes[0] || 'story',
           image_url: existingPage?.imageUrl,
+          is_front_cover: isFrontCover,
+          is_back_cover: isBackCover,
         }, { onConflict: 'book_id, page_number' });
 
       if (error) throw error;
@@ -159,6 +180,16 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           return [...prev, newPage].sort((a, b) => a.pageNumber - b.pageNumber);
         }
       });
+      
+      // If saving a cover for the first time, update book status
+      if ((isFrontCover && !book?.has_front_cover) || (isBackCover && !book?.has_back_cover)) {
+        const updateData: Partial<BookData> = {};
+        if (isFrontCover) updateData.has_front_cover = true;
+        if (isBackCover) updateData.has_back_cover = true;
+        
+        await supabase.from('books').update(updateData).eq('id', bookId);
+        setBook(prev => prev ? { ...prev, ...updateData } as BookData : null);
+      }
 
       alert('Page content saved!');
     } catch (error: any) {
@@ -194,6 +225,9 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       const newImageUrl = publicUrlData.publicUrl;
       const existingPage = pages.find(p => p.pageNumber === pageNumber);
       const activityTypes = existingPage?.activityTypes || ['image'];
+      
+      const isFrontCover = pageNumber === 0;
+      const isBackCover = book && pageNumber === book.target_pages + 1;
 
       // 3. Update the page in the database
       const { error: dbError } = await supabase
@@ -204,6 +238,8 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           image_url: newImageUrl,
           content: existingPage?.content || '',
           activity_type: activityTypes[0] || 'image',
+          is_front_cover: isFrontCover,
+          is_back_cover: isBackCover,
         }, { onConflict: 'book_id, page_number' });
 
       if (dbError) throw dbError;
@@ -227,6 +263,16 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           return [...prev, newPage].sort((a, b) => a.pageNumber - b.pageNumber);
         }
       });
+      
+      // If saving a cover for the first time, update book status
+      if ((isFrontCover && !book?.has_front_cover) || (isBackCover && !book?.has_back_cover)) {
+        const updateData: Partial<BookData> = {};
+        if (isFrontCover) updateData.has_front_cover = true;
+        if (isBackCover) updateData.has_back_cover = true;
+        
+        await supabase.from('books').update(updateData).eq('id', bookId);
+        setBook(prev => prev ? { ...prev, ...updateData } as BookData : null);
+      }
 
       alert('Image uploaded successfully!');
     } catch (error: any) {
@@ -239,6 +285,10 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
 
   const handleDeletePage = async (pageNumber: number) => {
     if (!bookId) return;
+    
+    const isFrontCover = pageNumber === 0;
+    const isBackCover = book && pageNumber === book.target_pages + 1;
+    
     if (!confirm(`Are you sure you want to delete page ${pageNumber}?`)) return;
 
     setIsSaving(true);
@@ -258,6 +308,19 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       if (pageNumber === currentPageNumber) {
         setCurrentPageNumber(prev => Math.max(1, prev - 1));
       }
+      
+      // If deleting a cover, update book status
+      if (isFrontCover || isBackCover) {
+        const updateData: Partial<BookData> = {};
+        if (isFrontCover) updateData.has_front_cover = false;
+        if (isBackCover) updateData.has_back_cover = false;
+        
+        await supabase.from('books').update(updateData).eq('id', bookId);
+        setBook(prev => prev ? { ...prev, ...updateData } as BookData : null);
+        
+        // Switch tab back to pages
+        setActiveTab('pages');
+      }
 
       alert(`Page ${pageNumber} deleted successfully!`);
     } catch (error: any) {
@@ -268,7 +331,9 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     }
   };
 
-  // --- AI Generation ---
+  // --- AI Generation (Image/Content) ---
+  
+  // ... (handleAIGenerateBook, handleGeneratePage, handleGenerateImage remain the same) ...
 
   const handleAIGenerateBook = async (prompt: string) => {
     if (!book || !bookId) return;
@@ -662,7 +727,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           onGeneratePDF={handleGeneratePDF}
           isGenerating={isGeneratingAI}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={handleTabChange}
           targetPages={book.target_pages}
           bookPrompt={book.book_prompt || ''}
           currentPageNumber={currentPageNumber}
