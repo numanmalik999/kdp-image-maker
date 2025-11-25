@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, ChevronLeft, ChevronRight, Edit2, Plus, PlusCircle, CheckCircle, FileText, Image as ImageIcon } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Edit2, Plus, PlusCircle, CheckCircle, FileText, Image as ImageIcon, Upload } from 'lucide-react';
 import { PageActivityType } from '../types';
 
 interface SinglePageEditorProps {
@@ -18,6 +18,7 @@ interface SinglePageEditorProps {
   onGenerateText: (pageNumber: number, prompt: string, activityType: PageActivityType) => Promise<void>;
   onGenerateImage: (pageNumber: number, prompt: string, activityType: PageActivityType) => Promise<void>;
   onGenerateCoverImage: (type: 'front' | 'back', prompt: string) => Promise<void>;
+  onUploadImage: (file: File) => Promise<void>; // New handler for image upload
   
   onNextPage: () => void;
   onPreviousPage: () => void;
@@ -53,6 +54,7 @@ export default function SinglePageEditor({
   onGenerateText,
   onGenerateImage,
   onGenerateCoverImage,
+  onUploadImage, // Destructure new prop
   onNextPage,
   onPreviousPage,
   onSaveBook,
@@ -68,6 +70,7 @@ export default function SinglePageEditor({
   const [activityType, setActivityType] = useState<PageActivityType>(pageActivityType);
   const [isGeneratingText, setIsGeneratingText] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isUploading, setIsUploading] = useState(false); // New state for upload
   const [editedContent, setEditedContent] = useState(pageContent);
   const [isEditingContent, setIsEditingContent] = useState(false);
 
@@ -120,6 +123,26 @@ export default function SinglePageEditor({
     setPrompt('');
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsUploading(true);
+      try {
+        await onUploadImage(file);
+        // Set activity type to 'image' automatically upon upload
+        setActivityType('image');
+        onUpdateContent(editedContent, 'image');
+      } catch (error) {
+        console.error('Upload failed:', error);
+        alert('Image upload failed. Please try again.');
+      } finally {
+        setIsUploading(false);
+        // Reset file input value to allow re-uploading the same file
+        e.target.value = ''; 
+      }
+    }
+  };
+
   const handleSaveEdit = () => {
     onUpdateContent(editedContent, activityType);
     setIsEditingContent(false);
@@ -145,7 +168,7 @@ export default function SinglePageEditor({
     return `Page ${currentPage} of ${totalPages}`;
   };
 
-  const isGenerating = isGeneratingText || isGeneratingImage;
+  const isGenerating = isGeneratingText || isGeneratingImage || isUploading;
 
   return (
     <div className="h-full flex">
@@ -257,6 +280,35 @@ export default function SinglePageEditor({
                 </>
               )}
             </button>
+          </div>
+
+          <div className="relative">
+            <input
+              type="file"
+              id="image-upload"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              disabled={isGenerating}
+            />
+            <label
+              htmlFor="image-upload"
+              className={`w-full px-4 py-2 border-2 border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 transition-colors text-sm font-medium flex items-center justify-center gap-2 cursor-pointer ${
+                isGenerating ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  Upload Your Image
+                </>
+              )}
+            </label>
           </div>
 
           {!isFrontCover && !isBackCover && (
@@ -395,7 +447,7 @@ export default function SinglePageEditor({
               </svg>
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No content yet</h3>
-            <p className="text-gray-600">Generate content for this page to see the preview</p>
+            <p className="text-gray-600">Generate content for this page or upload your own image</p>
           </div>
         )}
       </div>

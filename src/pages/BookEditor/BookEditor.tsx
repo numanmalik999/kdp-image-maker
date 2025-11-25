@@ -259,6 +259,61 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     }
   };
 
+  const handleUploadImage = async (file: File) => {
+    if (!book) {
+      alert('Book data is missing.');
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const fileExtension = file.name.split('.').pop();
+      const fileName = `${bookId}/${viewMode}-${currentPage}-${Date.now()}.${fileExtension}`;
+
+      const { data, error } = await supabase.storage
+        .from('book-images')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (error) throw error;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('book-images')
+        .getPublicUrl(data.path);
+
+      const imageUrl = publicUrlData.publicUrl;
+
+      if (viewMode === 'front-cover') {
+        setFrontCover(prev => ({
+          ...(prev || { id: 'front-cover', pageNumber: 0, content: '', activityType: 'image' }),
+          imageUrl,
+          activityType: 'image',
+        }));
+        await updateBookCoverStatus('front', true);
+      } else if (viewMode === 'back-cover') {
+        setBackCover(prev => ({
+          ...(prev || { id: 'back-cover', pageNumber: -1, content: '', activityType: 'image' }),
+          imageUrl,
+          activityType: 'image',
+        }));
+        await updateBookCoverStatus('back', true);
+      } else {
+        updatePageData(currentPage, { imageUrl, activityType: 'image' });
+      }
+
+      setToastMessage('Image uploaded successfully!');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      throw new Error('Failed to upload image.');
+    }
+  };
+
   const updateBookCoverStatus = async (type: 'front' | 'back', status: boolean) => {
     try {
       const field = type === 'front' ? 'has_front_cover' : 'has_back_cover';
@@ -616,6 +671,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
           onGenerateText={handleGeneratePageText}
           onGenerateImage={handleGeneratePageImage}
           onGenerateCoverImage={handleGenerateCoverImage}
+          onUploadImage={handleUploadImage} // Pass new handler
 
           onNextPage={handleNextPage}
           onPreviousPage={handlePreviousPage}
