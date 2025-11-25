@@ -74,13 +74,16 @@ export default function SinglePageEditor({
   const [editedContent, setEditedContent] = useState(pageContent);
   const [isEditingContent, setIsEditingContent] = useState(false);
 
+  const isCoverView = isFrontCover || isBackCover;
+
   useEffect(() => {
     setEditedContent(pageContent);
   }, [pageContent]);
 
   useEffect(() => {
-    setActivityType(pageActivityType);
-  }, [pageActivityType]);
+    // Covers should always default to 'image' type internally for saving purposes
+    setActivityType(isCoverView ? 'image' : pageActivityType);
+  }, [pageActivityType, isCoverView]);
 
   const handleGenerate = async (type: 'text' | 'image') => {
     const finalPrompt = prompt.trim() || bookPrompt;
@@ -89,7 +92,7 @@ export default function SinglePageEditor({
       return;
     }
 
-    if (isFrontCover || isBackCover) {
+    if (isCoverView) {
       // Covers only generate images
       if (type === 'image') {
         setIsGeneratingImage(true);
@@ -144,7 +147,9 @@ export default function SinglePageEditor({
   };
 
   const handleSaveEdit = () => {
-    onUpdateContent(editedContent, activityType);
+    // Covers are always saved with 'image' activity type
+    const finalActivityType = isCoverView ? 'image' : activityType;
+    onUpdateContent(editedContent, finalActivityType);
     setIsEditingContent(false);
   };
 
@@ -180,26 +185,36 @@ export default function SinglePageEditor({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {!isFrontCover && !isBackCover && (
-            <div className="space-y-2">
-              <button
-                onClick={onSwitchToFrontCover}
-                disabled={hasFrontCover}
-                className="w-full px-3 py-2 border-2 border-green-600 text-green-600 rounded-lg hover:bg-green-50 transition-colors text-sm font-medium disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-              >
-                {hasFrontCover ? 'Front Cover Created ✓' : 'Create Front Cover'}
-              </button>
-              <button
-                onClick={onSwitchToBackCover}
-                disabled={hasBackCover}
-                className="w-full px-3 py-2 border-2 border-green-600 text-green-600 rounded-lg hover:bg-green-50 transition-colors text-sm font-medium disabled:border-gray-300 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-              >
-                {hasBackCover ? 'Back Cover Created ✓' : 'Create Back Cover'}
-              </button>
-            </div>
-          )}
+          {/* Cover Navigation */}
+          <div className="space-y-2">
+            <button
+              onClick={onSwitchToFrontCover}
+              className={`w-full px-3 py-2 border-2 rounded-lg transition-colors text-sm font-medium ${
+                isFrontCover
+                  ? 'border-blue-600 bg-blue-50 text-blue-700'
+                  : hasFrontCover
+                  ? 'border-green-600 text-green-600 hover:bg-green-50'
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {hasFrontCover ? 'Edit Front Cover' : 'Create Front Cover'}
+            </button>
+            <button
+              onClick={onSwitchToBackCover}
+              className={`w-full px-3 py-2 border-2 rounded-lg transition-colors text-sm font-medium ${
+                isBackCover
+                  ? 'border-blue-600 bg-blue-50 text-blue-700'
+                  : hasBackCover
+                  ? 'border-green-600 text-green-600 hover:bg-green-50'
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              {hasBackCover ? 'Edit Back Cover' : 'Create Back Cover'}
+            </button>
+          </div>
 
-          {!(isFrontCover || isBackCover) && (
+          {/* Activity Type Selector (Only for regular pages) */}
+          {!isCoverView && (
             <div>
               <label htmlFor="activityType" className="block text-sm font-medium text-gray-700 mb-2">
                 Activity Type:
@@ -236,7 +251,7 @@ export default function SinglePageEditor({
 
           <div className="grid grid-cols-2 gap-2">
             {/* Generate Text Button (Only for pages, not covers) */}
-            {!(isFrontCover || isBackCover) && (
+            {!isCoverView && (
               <button
                 onClick={() => handleGenerate('text')}
                 disabled={isGenerating}
@@ -261,7 +276,7 @@ export default function SinglePageEditor({
               onClick={() => handleGenerate('image')}
               disabled={isGenerating}
               className={`w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
-                (isFrontCover || isBackCover) ? 'col-span-2' : ''
+                isCoverView ? 'col-span-2' : ''
               }`}
             >
               {isGeneratingImage ? (
@@ -311,7 +326,8 @@ export default function SinglePageEditor({
             </label>
           </div>
 
-          {!isFrontCover && !isBackCover && (
+          {/* Page Navigation (Only for regular pages) */}
+          {!isCoverView && (
             <>
               <div className="flex gap-2">
                 <button
@@ -397,7 +413,9 @@ export default function SinglePageEditor({
             {pageContent && (
               <div className="mt-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-700">Content</h3>
+                  <h3 className="text-sm font-medium text-gray-700">
+                    {isCoverView ? 'Cover Description / Text' : 'Content'}
+                  </h3>
                   {!isEditingContent && (
                     <button
                       onClick={() => setIsEditingContent(true)}
@@ -414,7 +432,8 @@ export default function SinglePageEditor({
                       value={editedContent}
                       onChange={(e) => setEditedContent(e.target.value)}
                       className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                      rows={8}
+                      rows={isCoverView ? 4 : 8}
+                      placeholder={isCoverView ? "Enter a brief description or title text for the cover." : "Page content..."}
                     />
                     <div className="flex gap-2">
                       <button
