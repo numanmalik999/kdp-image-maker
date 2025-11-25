@@ -1,3 +1,4 @@
+/// <reference types="https://deno.land/std@0.190.0/http/server.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
@@ -10,6 +11,7 @@ const corsHeaders = {
 interface RequestBody {
   prompt: string;
   bookId?: string;
+  activityType?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -21,7 +23,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { prompt, bookId }: RequestBody = await req.json();
+    const { prompt, bookId }: RequestBody = await req.json(); 
 
     if (!prompt) {
       return new Response(
@@ -44,7 +46,10 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const enhancedPrompt = `Create a simple, clean black and white line art coloring page illustration suitable for children. The image should have clear, bold outlines with no shading or colors, just black lines on a white background. Subject: ${prompt}. Style: Simple, friendly, suitable for coloring books, with clear defined spaces to color in.`;
+    // CRITICAL: Prioritize user prompt while enforcing coloring book style
+    const coloringStyle = "Simple, clean black and white line art illustration suitable for coloring books. Use clear, bold outlines with no shading or colors, just black lines on a white background.";
+    
+    const enhancedPrompt = `${coloringStyle} Subject: ${prompt}.`;
 
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
