@@ -3,7 +3,6 @@ import { useParams } from 'react-router-dom';
 import { ArrowLeft, Settings, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import EditorArea from '../../components/EditorArea';
-import Sidebar from '../../components/Sidebar';
 import BookSettingsModal from '../../components/BookSettingsModal';
 import ExportModal from '../../components/ExportModal';
 import ImageEditorModal from '../../components/ImageEditorModal';
@@ -94,15 +93,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
 
   // --- Settings & Persistence ---
 
-  const handleSettingsChange = (newSettings: BookSettings) => {
-    if (book) {
-      setBook(prev => prev ? { ...prev, ...newSettings } : null);
-      // If target pages change, ensure current page is still valid
-      if (newSettings.targetPages < currentPageNumber) {
-        setCurrentPageNumber(newSettings.targetPages > 0 ? newSettings.targetPages : 1);
-      }
-    }
-  };
+  // Removed handleSettingsChange as it was unused.
 
   const handleSaveSettings = async (newSettings: BookSettings) => {
     if (!bookId) return;
@@ -482,41 +473,33 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar
-        settings={currentSettings}
-        onSettingsChange={handleSettingsChange}
-        onInsertSample={handleInsertSample}
-        onAIGenerate={handleAIGenerateBook}
-        isGeneratingAI={isGeneratingAI}
-      />
+    <div className="flex flex-col h-screen">
+      <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors font-medium"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back to Dashboard
+          </button>
+          <h1 className="text-xl font-bold text-gray-900 truncate max-w-xs">
+            {book.title}
+          </h1>
+          <span className="text-sm text-gray-500">({book.trim_size})</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsSettingsModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+          >
+            <Settings className="w-4 h-4" />
+            Settings
+          </button>
+        </div>
+      </header>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors font-medium"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Back to Dashboard
-            </button>
-            <h1 className="text-xl font-bold text-gray-900 truncate max-w-xs">
-              {book.title}
-            </h1>
-            <span className="text-sm text-gray-500">({book.trim_size})</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSettingsModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-            >
-              <Settings className="w-4 h-4" />
-              Settings
-            </button>
-          </div>
-        </header>
-
+      <div className="flex-1 overflow-y-auto">
         <EditorArea
           singleText={singleText}
           onSingleTextChange={setSingleText}
@@ -545,6 +528,10 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
         settings={currentSettings}
         onSave={handleSaveSettings}
         isSaving={isSaving}
+        onInsertSample={handleInsertSample}
+        onAIGenerate={handleAIGenerateBook}
+        isGeneratingAI={isGeneratingAI}
+        bookPrompt={book.book_prompt || ''}
       />
 
       <ExportModal
