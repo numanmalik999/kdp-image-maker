@@ -55,7 +55,7 @@ Deno.serve(async (req: Request) => {
       styleModifier = "Simple, clean black and white line art illustration suitable for coloring books. Use clear, bold outlines with no shading or colors, just black lines on a white background. Subject: ";
     }
 
-    const tracingNote = tracingWord && tracingWord.trim()
+    const tracingNote = tracingWord && activityTypes?.includes('tracing')
       ? ` Include the tracing word '${tracingWord}' in large bold letters at the bottom of the image for tracing practice.`
       : '';
 

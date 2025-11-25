@@ -14,6 +14,7 @@ interface EditorAreaProps {
   onPagesChange: (pages: Page[]) => void;
   onGeneratePage: (pageNumber: number, prompt: string) => Promise<void>;
   onGenerateImage: (pageNumber: number, prompt: string) => Promise<void>;
+  onEditImage: (pageNumber: number) => void; // Added missing prop
   fontSize: number;
   onGeneratePDF: () => void;
   isGenerating: boolean;
@@ -32,6 +33,7 @@ export default function EditorArea({
   onPagesChange,
   onGeneratePage,
   onGenerateImage,
+  onEditImage, // Destructure the new prop
   fontSize,
   onGeneratePDF,
   isGenerating,
@@ -113,6 +115,7 @@ export default function EditorArea({
                 onChange={onPagesChange}
                 onGeneratePage={onGeneratePage}
                 onGenerateImage={onGenerateImage}
+                onEditImage={onEditImage} // Passed down
                 totalPages={targetPages}
                 bookPrompt={bookPrompt}
               />

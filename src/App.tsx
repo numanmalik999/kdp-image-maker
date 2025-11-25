@@ -1,4 +1,3 @@
-/* @ts-nocheck */
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import Landing from './pages/Landing';
 import Pricing from './pages/Pricing';
