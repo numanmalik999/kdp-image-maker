@@ -145,6 +145,18 @@ export default function SinglePageEditor({
       setIsGeneratingImage(true);
       try {
         await onGenerateImage(currentPage, finalPrompt, activityTypes);
+
+        // NEW: Auto-generate tracing text if tracing is selected and no content exists yet
+        const hasContent = pageContent && pageContent.trim().length > 0;
+        if (activityTypes.includes('tracing') && !hasContent) {
+          setIsGeneratingText(true);
+          try {
+            await onGenerateText(currentPage, finalPrompt, activityTypes);
+          } finally {
+            setIsGeneratingText(false);
+          }
+        }
+
       } finally {
         setIsGeneratingImage(false);
       }
