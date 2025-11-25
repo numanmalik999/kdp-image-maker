@@ -56,8 +56,8 @@ export default function useBookPersistence({
       const isFrontCover = pageNumber === 0;
       const isBackCover = book && pageNumber === book.target_pages + 1;
       
-      // The image URL should be the one currently in the local state (updated by image upload/generation)
-      const imageUrlToSave = existingPage?.imageUrl; 
+      // CRITICAL: Get the image URL from the current local state, which was updated by handleImageUpload
+      const imageUrlToSave = existingPage?.imageUrl || null; 
       
       console.log(`[SavePage] Page ${pageNumber} - Image URL to save:`, imageUrlToSave);
 
@@ -69,7 +69,7 @@ export default function useBookPersistence({
           content: content,
           // Use the activityTypes passed from the editor, defaulting if empty
           activity_type: activityTypes[0] || 'story', 
-          image_url: imageUrlToSave, 
+          image_url: imageUrlToSave, // Explicitly set the image URL
           is_front_cover: isFrontCover,
           is_back_cover: isBackCover,
         }, { onConflict: 'book_id, page_number' });
@@ -87,7 +87,7 @@ export default function useBookPersistence({
           id: existingPage?.id || `db-temp-${pageNumber}`, // Use a temporary ID if none exists yet
           pageNumber,
           content,
-          imageUrl: imageUrlToSave,
+          imageUrl: imageUrlToSave || undefined, // Use the saved URL
           activityTypes: activityTypes,
         };
         
