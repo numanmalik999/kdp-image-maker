@@ -11,6 +11,9 @@ interface UseBookPersistenceProps {
   setIsSaving: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
+// Define the necessary type locally to match the caller (BookEditor.tsx)
+type EditorTab = 'single' | 'chapters' | 'pages' | 'front_cover' | 'back_cover';
+
 export default function useBookPersistence({
   bookId,
   book,
@@ -108,6 +111,52 @@ export default function useBookPersistence({
     }
   };
 
+  const handleDeletePage = async (pageNumber: number, setCurrentPageNumber: React.Dispatch<React.SetStateAction<number>>, setActiveTab: React.Dispatch<React.SetStateAction<EditorTab>>) => {
+    if (!bookId) return;
+    
+    const isFrontCover = pageNumber === 0;
+    const isBackCover = book && pageNumber === book.target_pages + 1;
+    
+    if (!confirm(`Are you sure you want to delete page ${pageNumber}?`)) return;
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('book_pages')
+        .delete()
+        .eq('book_id', bookId)
+        .eq('page_number', pageNumber);
+
+      if (error) throw error;
+
+      // Update local state
+      setPages(prev => prev.filter(p => p.pageNumber !== pageNumber));
+      
+      // If we deleted the current page, move to the previous one (or 1)
+      setCurrentPageNumber(prev => Math.max(1, prev - 1));
+      
+      // If deleting a cover, update book status
+      if (isFrontCover || isBackCover) {
+        const updateData: Partial<BookData> = {};
+        if (isFrontCover) updateData.has_front_cover = false;
+        if (isBackCover) updateData.has_back_cover = false;
+        
+        await supabase.from('books').update(updateData).eq('id', bookId);
+        setBook((prev: BookData | null) => prev ? { ...prev, ...updateData } as BookData : null);
+        
+        // Switch tab back to pages
+        setActiveTab('pages');
+      }
+
+      alert(`Page ${pageNumber} deleted successfully!`);
+    } catch (error: any) {
+      console.error('Error deleting page:', error);
+      alert('Failed to delete page.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleImageUpload = async (pageNumber: number, file: File) => {
     if (!bookId) return;
     setIsSaving(true);
@@ -193,52 +242,6 @@ export default function useBookPersistence({
     } catch (error: any) {
       console.error('Image Upload Error:', error);
       alert(`Failed to upload image: ${error.message}`);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDeletePage = async (pageNumber: number, setCurrentPageNumber: React.Dispatch<React.SetStateAction<number>>, setActiveTab: React.Dispatch<React.SetStateAction<string>>) => {
-    if (!bookId) return;
-    
-    const isFrontCover = pageNumber === 0;
-    const isBackCover = book && pageNumber === book.target_pages + 1;
-    
-    if (!confirm(`Are you sure you want to delete page ${pageNumber}?`)) return;
-
-    setIsSaving(true);
-    try {
-      const { error } = await supabase
-        .from('book_pages')
-        .delete()
-        .eq('book_id', bookId)
-        .eq('page_number', pageNumber);
-
-      if (error) throw error;
-
-      // Update local state
-      setPages(prev => prev.filter(p => p.pageNumber !== pageNumber));
-      
-      // If we deleted the current page, move to the previous one (or 1)
-      setCurrentPageNumber(prev => Math.max(1, prev - 1));
-      
-      // If deleting a cover, update book status
-      if (isFrontCover || isBackCover) {
-        const updateData: Partial<BookData> = {};
-        if (isFrontCover) updateData.has_front_cover = false;
-        if (isBackCover) updateData.has_back_cover = false;
-        
-        await supabase.from('books').update(updateData).eq('id', bookId);
-        setBook((prev: BookData | null) => prev ? { ...prev, ...updateData } as BookData : null);
-        
-        // Switch tab back to pages
-        setActiveTab('pages');
-      }
-
-      alert(`Page ${pageNumber} deleted successfully!`);
-    } catch (error: any) {
-      console.error('Error deleting page:', error);
-      alert('Failed to delete page.');
     } finally {
       setIsSaving(false);
     }
