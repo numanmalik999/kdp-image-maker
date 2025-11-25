@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Loader2, ChevronLeft, ChevronRight, Edit2, Plus, PlusCircle, CheckCircle, FileText, Image as ImageIcon } from 'lucide-react';
+import { PageActivityType } from '../types';
 
 interface SinglePageEditorProps {
   currentPage: number;
   totalPages: number;
   pageContent: string;
   pageImage?: string;
+  pageActivityType?: PageActivityType; // New prop
   bookPrompt: string;
   hasFrontCover: boolean;
   hasBackCover: boolean;
@@ -13,14 +15,14 @@ interface SinglePageEditorProps {
   isBackCover?: boolean;
   
   // Updated props: separate handlers for text and image
-  onGenerateText: (pageNumber: number, prompt: string) => Promise<void>;
-  onGenerateImage: (pageNumber: number, prompt: string) => Promise<void>;
+  onGenerateText: (pageNumber: number, prompt: string, activityType: PageActivityType) => Promise<void>;
+  onGenerateImage: (pageNumber: number, prompt: string, activityType: PageActivityType) => Promise<void>;
   onGenerateCoverImage: (type: 'front' | 'back', prompt: string) => Promise<void>;
   
   onNextPage: () => void;
   onPreviousPage: () => void;
   onSaveBook: () => void;
-  onUpdateContent: (content: string) => void;
+  onUpdateContent: (content: string, activityType: PageActivityType) => void; // Updated handler
   onSwitchToFrontCover: () => void;
   onSwitchToBackCover: () => void;
   onAddNewPage: () => void;
@@ -29,11 +31,20 @@ interface SinglePageEditorProps {
   isSaving: boolean;
 }
 
+const ACTIVITY_OPTIONS: { value: PageActivityType; label: string }[] = [
+  { value: 'coloring', label: 'Coloring/Tracing' },
+  { value: 'story', label: 'Story/Text Page' },
+  { value: 'maze', label: 'Maze' },
+  { value: 'dot-to-dot', label: 'Dot-to-Dot Game' },
+  { value: 'image', label: 'Full Page Image' },
+];
+
 export default function SinglePageEditor({
   currentPage,
   totalPages,
   pageContent,
   pageImage,
+  pageActivityType = 'coloring', // Default to coloring
   bookPrompt,
   hasFrontCover,
   hasBackCover,
@@ -54,6 +65,7 @@ export default function SinglePageEditor({
   isSaving,
 }: SinglePageEditorProps) {
   const [prompt, setPrompt] = useState('');
+  const [activityType, setActivityType] = useState<PageActivityType>(pageActivityType);
   const [isGeneratingText, setIsGeneratingText] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [editedContent, setEditedContent] = useState(pageContent);
@@ -63,6 +75,10 @@ export default function SinglePageEditor({
     setEditedContent(pageContent);
   }, [pageContent]);
 
+  useEffect(() => {
+    setActivityType(pageActivityType);
+  }, [pageActivityType]);
+
   const handleGenerate = async (type: 'text' | 'image') => {
     const finalPrompt = prompt.trim() || bookPrompt;
     if (!finalPrompt) {
@@ -70,42 +86,55 @@ export default function SinglePageEditor({
       return;
     }
 
-    if (type === 'text') {
-      setIsGeneratingText(true);
-    } else {
-      setIsGeneratingImage(true);
-    }
-
-    try {
-      if (isFrontCover || isBackCover) {
-        // Covers only generate images
-        if (type === 'image') {
+    if (isFrontCover || isBackCover) {
+      // Covers only generate images
+      if (type === 'image') {
+        setIsGeneratingImage(true);
+        try {
           await onGenerateCoverImage(isFrontCover ? 'front' : 'back', finalPrompt);
-        } else {
-          alert('Text generation is not available for covers.');
+        } finally {
+          setIsGeneratingImage(false);
         }
       } else {
-        if (type === 'text') {
-          await onGenerateText(currentPage, finalPrompt);
-        } else {
-          await onGenerateImage(currentPage, finalPrompt);
-        }
+        alert('Text generation is not available for covers.');
       }
-      setPrompt('');
-    } finally {
-      setIsGeneratingText(false);
-      setIsGeneratingImage(false);
+      return;
     }
+
+    // Regular pages
+    if (type === 'text') {
+      setIsGeneratingText(true);
+      try {
+        await onGenerateText(currentPage, finalPrompt, activityType);
+      } finally {
+        setIsGeneratingText(false);
+      }
+    } else {
+      setIsGeneratingImage(true);
+      try {
+        await onGenerateImage(currentPage, finalPrompt, activityType);
+      } finally {
+        setIsGeneratingImage(false);
+      }
+    }
+    setPrompt('');
   };
 
   const handleSaveEdit = () => {
-    onUpdateContent(editedContent);
+    onUpdateContent(editedContent, activityType);
     setIsEditingContent(false);
   };
 
   const handleCancelEdit = () => {
     setEditedContent(pageContent);
     setIsEditingContent(false);
+  };
+
+  const handleActivityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newActivityType = e.target.value as PageActivityType;
+    setActivityType(newActivityType);
+    // Immediately update content/activity type in parent state
+    onUpdateContent(editedContent, newActivityType);
   };
 
   const completedPages = totalPages > 0 ? currentPage : 0;
@@ -147,7 +176,26 @@ export default function SinglePageEditor({
             </div>
           )}
 
-          {/* Removed Activity Type and AI Model selection */}
+          {!(isFrontCover || isBackCover) && (
+            <div>
+              <label htmlFor="activityType" className="block text-sm font-medium text-gray-700 mb-2">
+                Activity Type:
+              </label>
+              <select
+                id="activityType"
+                value={activityType}
+                onChange={handleActivityChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isGenerating}
+              >
+                {ACTIVITY_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Page } from '../../types';
+import { Page, PageActivityType } from '../../types';
 import { generateColoringImage, generatePageContent } from '../../utils/aiGeneration';
 import { supabase, Book } from '../../lib/supabase';
 import { ArrowLeft, Loader2 } from 'lucide-react';
@@ -82,6 +82,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
             pageNumber: p.page_number,
             content: p.content || '',
             imageUrl: p.image_url || undefined,
+            activityType: (p as any).activity_type || 'coloring', // Load activity type
           };
 
           if (p.is_front_cover) {
@@ -106,6 +107,8 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     const updatedPages = [...pages];
     const pageIndex = updatedPages.findIndex(p => p.pageNumber === pageNumber);
 
+    const defaultActivityType: PageActivityType = 'coloring';
+
     if (pageIndex >= 0) {
       updatedPages[pageIndex] = { ...updatedPages[pageIndex], ...updates };
     } else {
@@ -115,6 +118,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         pageNumber,
         content: updates.content || '',
         imageUrl: updates.imageUrl,
+        activityType: updates.activityType || defaultActivityType,
       });
     }
 
@@ -122,7 +126,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     setPages(updatedPages);
   };
 
-  const handleGeneratePageText = async (pageNumber: number, prompt: string) => {
+  const handleGeneratePageText = async (pageNumber: number, prompt: string, activityType: PageActivityType) => {
     if (!sessionToken || !book) {
       alert('Authentication required for AI generation.');
       return;
@@ -151,13 +155,14 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         book.target_pages,
         book.font_size,
         sessionToken,
-        book.book_prompt || undefined
+        book.book_prompt || undefined,
+        activityType // Pass activity type to AI function
       );
       
       await decrementAICredits(user.id);
       await incrementPageCount(user.id);
 
-      updatePageData(pageNumber, { content });
+      updatePageData(pageNumber, { content, activityType });
 
       setToastMessage(`Page ${pageNumber} text generated successfully!`);
       setShowToast(true);
@@ -170,7 +175,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     }
   };
 
-  const handleGeneratePageImage = async (pageNumber: number, prompt: string) => {
+  const handleGeneratePageImage = async (pageNumber: number, prompt: string, activityType: PageActivityType) => {
     if (!sessionToken || !book) {
       alert('Authentication required for AI generation.');
       return;
@@ -187,12 +192,12 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       }
 
       // Generate Image (DALL-E 3)
-      const imageUrl = await generateColoringImage(prompt, 'DALL-E 3', bookId, sessionToken);
+      const imageUrl = await generateColoringImage(prompt, 'DALL-E 3', bookId, sessionToken, activityType);
       
       await decrementAICredits(user.id);
       await incrementImageCount(user.id);
 
-      updatePageData(pageNumber, { imageUrl });
+      updatePageData(pageNumber, { imageUrl, activityType });
 
       setToastMessage(`Page ${pageNumber} image generated successfully!`);
       setShowToast(true);
@@ -222,7 +227,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       }
 
       // Covers only generate images
-      const imageUrl = await generateColoringImage(prompt, 'DALL-E 3', bookId, sessionToken);
+      const imageUrl = await generateColoringImage(prompt, 'DALL-E 3', bookId, sessionToken, 'image'); // Covers are always 'image' type
 
       await decrementAICredits(user.id);
       await incrementImageCount(user.id);
@@ -232,6 +237,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         pageNumber: type === 'front' ? 0 : -1,
         content: prompt,
         imageUrl,
+        activityType: 'image',
       };
 
       if (type === 'front') {
@@ -295,6 +301,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
               image_url: page.imageUrl || null,
               is_front_cover: false,
               is_back_cover: false,
+              activity_type: page.activityType || 'coloring', // Save activity type
             });
 
           if (pageError) throw pageError;
@@ -312,6 +319,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
             image_url: frontCover.imageUrl || null,
             is_front_cover: true,
             is_back_cover: false,
+            activity_type: frontCover.activityType || 'image',
           }, {
             onConflict: 'book_id,page_number'
           });
@@ -330,6 +338,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
             image_url: backCover.imageUrl || null,
             is_front_cover: false,
             is_back_cover: true,
+            activity_type: backCover.activityType || 'image',
           }, {
             onConflict: 'book_id,page_number'
           });
@@ -362,20 +371,20 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     }
   };
 
-  const handleUpdateContent = (content: string) => {
+  const handleUpdateContent = (content: string, activityType: PageActivityType) => {
     if (viewMode === 'front-cover' && frontCover) {
-      setFrontCover({ ...frontCover, content });
+      setFrontCover({ ...frontCover, content, activityType });
     } else if (viewMode === 'back-cover' && backCover) {
-      setBackCover({ ...backCover, content });
+      setBackCover({ ...backCover, content, activityType });
     } else {
       const updatedPages = [...pages];
       const pageIndex = updatedPages.findIndex(p => p.pageNumber === currentPage);
       if (pageIndex >= 0) {
-        updatedPages[pageIndex] = { ...updatedPages[pageIndex], content };
+        updatedPages[pageIndex] = { ...updatedPages[pageIndex], content, activityType };
         setPages(updatedPages);
       } else {
         // If page doesn't exist, create it with content
-        updatePageData(currentPage, { content });
+        updatePageData(currentPage, { content, activityType });
       }
     }
   };
@@ -525,6 +534,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       return {
         content: frontCover?.content || '',
         imageUrl: frontCover?.imageUrl,
+        activityType: frontCover?.activityType || 'image',
         isFrontCover: true,
         isBackCover: false,
       };
@@ -534,6 +544,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       return {
         content: backCover?.content || '',
         imageUrl: backCover?.imageUrl,
+        activityType: backCover?.activityType || 'image',
         isFrontCover: false,
         isBackCover: true,
       };
@@ -543,6 +554,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     return {
       content: page?.content || '',
       imageUrl: page?.imageUrl,
+      activityType: page?.activityType || 'coloring',
       isFrontCover: false,
       isBackCover: false,
     };
@@ -569,7 +581,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     );
   }
 
-  const { content, imageUrl, isFrontCover, isBackCover } = getCurrentPageData();
+  const { content, imageUrl, activityType, isFrontCover, isBackCover } = getCurrentPageData();
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
@@ -593,6 +605,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
           totalPages={book.target_pages}
           pageContent={content}
           pageImage={imageUrl}
+          pageActivityType={activityType}
           bookPrompt={book.book_prompt || ''}
           hasFrontCover={book.has_front_cover}
           hasBackCover={book.has_back_cover}

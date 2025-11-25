@@ -1,5 +1,6 @@
 export type TrimSize = '6x9' | '5x8' | '8.5x11';
 export type FontSize = 10 | 11 | 12;
+export type PageActivityType = 'coloring' | 'story' | 'maze' | 'dot-to-dot' | 'image';
 
 export interface BookSettings {
   title: string;
@@ -20,6 +21,7 @@ export interface Page {
   pageNumber: number;
   content: string;
   imageUrl?: string;
+  activityType?: PageActivityType; // Added activityType
 }
 
 export interface TrimDimensions {

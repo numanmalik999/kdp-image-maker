@@ -1,4 +1,4 @@
-import { Chapter } from '../types';
+import { Chapter, PageActivityType } from '../types';
 import { SUPABASE_URL } from '../lib/config'; // Removed SUPABASE_ANON_KEY import
 
 interface GeneratedContent {
@@ -55,7 +55,8 @@ export async function generatePageContent(
   totalPages: number,
   fontSize: number,
   token: string,
-  bookContext?: string
+  bookContext?: string,
+  activityType?: PageActivityType // Added activityType
 ): Promise<string> {
   const apiUrl = `${SUPABASE_URL}/functions/v1/generate-page-content`;
 
@@ -71,6 +72,7 @@ export async function generatePageContent(
       totalPages,
       fontSize,
       bookContext,
+      activityType, // Passed activityType to Edge Function
     }),
   });
 
@@ -83,7 +85,13 @@ export async function generatePageContent(
   return data.content;
 }
 
-export async function generateColoringImage(prompt: string, model: string = 'DALL-E 3', bookId?: string, token?: string): Promise<string> {
+export async function generateColoringImage(
+  prompt: string, 
+  model: string = 'DALL-E 3', 
+  bookId?: string, 
+  token?: string,
+  activityType?: PageActivityType // Added activityType
+): Promise<string> {
   let functionName = 'generate-coloring-image';
 
   if (model === 'Gemini') {
@@ -102,6 +110,7 @@ export async function generateColoringImage(prompt: string, model: string = 'DAL
     body: JSON.stringify({
       prompt,
       bookId,
+      activityType, // Passed activityType to Edge Function
     }),
   });
 
