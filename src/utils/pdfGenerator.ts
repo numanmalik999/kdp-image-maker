@@ -111,24 +111,61 @@ export async function generateKDPPDF(options: PDFGeneratorOptions): Promise<void
 
   if (usePages && pages && pages.length > 0) {
     for (const [index, page] of pages.entries()) {
+      // Determine if this is a coloring/tracing page
+      const isColoringPage = page.activityType === 'coloring';
+      
+      // Reset Y position for a new page if needed
+      if (index > 0) {
+        doc.addPage();
+        yPosition = margin;
+      }
+
       if (page.imageUrl) {
         await addImageToPage(page.imageUrl);
       }
 
       if (page.content) {
         const paragraphs = page.content.split(/\n\n+/);
+        
+        // Apply larger font size for tracing text
+        if (isColoringPage) {
+          doc.setFontSize(24); // Use a large font for tracing
+          doc.setFont('helvetica', 'normal');
+        } else {
+          doc.setFontSize(fontSize);
+          doc.setFont('helvetica', 'normal');
+        }
+
         paragraphs.forEach((paragraph, pIndex) => {
           if (paragraph.trim()) {
-            addTextToPage(paragraph.trim());
+            // Use a custom text adder for coloring pages to handle large font
+            const currentFontSize = isColoringPage ? 24 : fontSize;
+            const lines = doc.splitTextToSize(paragraph.trim(), textWidth);
+            const lineHeight = currentFontSize / 72 * 1.2;
+
+            for (const line of lines) {
+              if (yPosition + lineHeight > pageHeight - margin) {
+                // If text overflows, add a new page
+                doc.addPage();
+                yPosition = margin;
+                
+                // Reapply font settings on new page
+                if (isColoringPage) {
+                  doc.setFontSize(24);
+                } else {
+                  doc.setFontSize(fontSize);
+                }
+              }
+
+              doc.text(line, margin, yPosition);
+              yPosition += lineHeight;
+            }
+
             if (pIndex < paragraphs.length - 1) {
-              yPosition += (fontSize / 72) * 0.5;
+              yPosition += (currentFontSize / 72) * 0.5;
             }
           }
         });
-      }
-
-      if (index < pages.length - 1) {
-        yPosition += (fontSize / 72) * 1.5;
       }
     }
   } else if (useChapters && chapters && chapters.length > 0) {
@@ -210,13 +247,14 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
     });
   };
 
-  const addImageToPage = async (imageUrl: string, reserveTextSpace: boolean = false) => {
+  const addImageToPage = async (imageUrl: string, reserveTextSpace: boolean = false): Promise<number> => {
     try {
       const { base64, width, height } = await loadImageAsBase64(imageUrl);
 
       const imgAspectRatio = width / height;
       const maxWidth = pageWidth - 2 * margin;
-      const maxHeight = reserveTextSpace ? (pageHeight * 0.65 - margin) : (pageHeight - 2 * margin);
+      // Reserve more space for coloring pages (e.g., 75% of height)
+      const maxHeight = reserveTextSpace ? (pageHeight * 0.75 - margin) : (pageHeight - 2 * margin);
 
       let finalWidth = maxWidth;
       let finalHeight = maxWidth / imgAspectRatio;
@@ -248,13 +286,18 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
     }
   };
 
-  const addTextToPage = (text: string, startY: number = margin) => {
-    doc.setFontSize(10);
+  const addTextToPage = (text: string, startY: number = margin, isTracing: boolean = false) => {
+    const baseFontSize = book.font_size;
+    const tracingFontSize = 24; // Large font for tracing
+
+    doc.setFontSize(isTracing ? tracingFontSize : baseFontSize);
     doc.setFont('helvetica', 'normal');
+
+    const currentFontSize = isTracing ? tracingFontSize : baseFontSize;
+    const lineHeight = currentFontSize / 72 * 1.2;
 
     const lines = doc.splitTextToSize(text, textWidth);
     let yPosition = startY;
-    const lineHeight = 0.2;
 
     for (const line of lines) {
       if (yPosition + lineHeight > pageHeight - margin) {
@@ -271,13 +314,16 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
     if (!isFirstPage) doc.addPage();
     isFirstPage = false;
 
-    if (page.imageUrl && page.content) {
-      const textStartY = await addImageToPage(page.imageUrl, true);
-      addTextToPage(page.content, textStartY);
-    } else if (page.imageUrl) {
-      await addImageToPage(page.imageUrl, false);
-    } else if (page.content) {
-      addTextToPage(page.content);
+    const isTracingPage = page.activityType === 'coloring';
+    let textStartY = margin;
+
+    if (page.imageUrl) {
+      // Reserve space for text if it's a tracing page
+      textStartY = await addImageToPage(page.imageUrl, isTracingPage);
+    }
+
+    if (page.content) {
+      addTextToPage(page.content, textStartY, isTracingPage);
     }
   }
 
