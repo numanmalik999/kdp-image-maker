@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { BookSettings, Page, Chapter, PageActivityType } from '../types';
+import { BookSettings, Page, Chapter, PageActivityType, EditorTab } from '../types';
 import { BookData } from './useBookData';
 
 interface UseBookPersistenceProps {
@@ -10,9 +10,6 @@ interface UseBookPersistenceProps {
   setPages: React.Dispatch<React.SetStateAction<Page[]>>;
   setIsSaving: React.Dispatch<React.SetStateAction<boolean>>;
 }
-
-// Define the necessary type locally to match the caller (BookEditor.tsx)
-type EditorTab = 'single' | 'chapters' | 'pages' | 'front_cover' | 'back_cover';
 
 export default function useBookPersistence({
   bookId,

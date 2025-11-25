@@ -11,7 +11,7 @@ interface PagesEditorProps {
   bookPrompt: string;
   currentPageNumber: number;
   onPageChange: (newPageNumber: number) => void;
-  onSavePageContent: (pageNumber: number, content: string, activityTypes: string[]) => Promise<void>;
+  onSavePageContent: (pageNumber: number, content: string, activityTypes: PageActivityType[]) => Promise<void>;
   onImageUpload: (pageNumber: number, file: File) => Promise<void>;
   onDeletePage: (pageNumber: number) => Promise<void>;
   isSaving: boolean;

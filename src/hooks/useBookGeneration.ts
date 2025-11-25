@@ -1,8 +1,8 @@
 import { supabase } from '../lib/supabase';
 import { BookData } from './useBookData';
-import { Page, Chapter } from '../types';
+import { Page } from '../types';
 import { checkAICredits, decrementAICredits, incrementPageCount, incrementImageCount, checkPageCreationLimit } from '../utils/subscriptionLimits';
-import { generateBookContent, convertToChapters, convertToSingleText, generatePageContent, generateColoringImage } from '../utils/aiGeneration';
+import { generatePageContent, generateColoringImage } from '../utils/aiGeneration';
 
 interface UseBookGenerationProps {
   bookId: string;
@@ -10,8 +10,6 @@ interface UseBookGenerationProps {
   pages: Page[];
   setBook: React.Dispatch<React.SetStateAction<BookData | null>>;
   setPages: React.Dispatch<React.SetStateAction<Page[]>>;
-  setChapters: React.Dispatch<React.SetStateAction<Chapter[]>>;
-  setSingleText: React.Dispatch<React.SetStateAction<string>>;
   setIsGeneratingAI: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
@@ -19,68 +17,10 @@ export default function useBookGeneration({
   bookId,
   book,
   pages,
-  setBook,
   setPages,
-  setChapters,
-  setSingleText,
-  setIsGeneratingAI,
 }: UseBookGenerationProps) {
 
-  const handleAIGenerateBook = async (prompt: string) => {
-    if (!book || !bookId) return;
-    setIsGeneratingAI(true);
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      alert('Please log in to use AI generation.');
-      setIsGeneratingAI(false);
-      return;
-    }
-
-    const creditCheck = await checkAICredits(session.user.id);
-    if (!creditCheck.allowed) {
-      alert(creditCheck.message);
-      setIsGeneratingAI(false);
-      return;
-    }
-
-    try {
-      // 1. Generate content
-      const generatedContent = await generateBookContent(
-        prompt,
-        book.target_pages,
-        book.font_size,
-        book.trim_size,
-        session.access_token
-      );
-
-      // 2. Update book prompt and title
-      await supabase
-        .from('books')
-        .update({
-          book_prompt: prompt,
-          title: generatedContent.title,
-        })
-        .eq('id', bookId);
-
-      setBook((prev: BookData | null) => prev ? { ...prev, book_prompt: prompt, title: generatedContent.title } : null);
-
-      // 3. Update content states
-      const newChapters = convertToChapters(generatedContent);
-      setChapters(newChapters);
-      setSingleText(convertToSingleText(generatedContent));
-      
-      // 4. Decrement credits
-      await decrementAICredits(session.user.id);
-
-      alert('Book content generated successfully!');
-    } catch (error: any) {
-      console.error('AI Generation Error:', error);
-      alert(`AI Generation Failed: ${error.message}`);
-    } finally {
-      setIsGeneratingAI(false);
-    }
-  };
+  // Removed handleAIGenerateBook
 
   const handleGeneratePage = async (pageNumber: number, prompt: string) => {
     if (!book || !bookId) return;
@@ -233,7 +173,6 @@ export default function useBookGeneration({
   };
 
   return {
-    handleAIGenerateBook,
     handleGeneratePage,
     handleGenerateImage,
   };

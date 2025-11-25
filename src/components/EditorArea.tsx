@@ -1,17 +1,11 @@
-import { Chapter, Page, PageActivityType } from '../types';
-import { FileText, BookOpen, Download, FileStack, BookOpenCheck, BookOpenText, Save } from 'lucide-react';
-import SingleTextEditor from './SingleTextEditor';
-import ChaptersEditor from './ChaptersEditor';
+import { Page, PageActivityType } from '../types';
+import { Download, FileStack, BookOpenCheck, BookOpenText } from 'lucide-react';
 import PagesEditor from './PagesEditor';
 import { countWords, estimatePages } from '../utils/textUtils';
 
-type EditorTab = 'single' | 'chapters' | 'pages' | 'front_cover' | 'back_cover';
+type EditorTab = 'pages' | 'front_cover' | 'back_cover';
 
 interface EditorAreaProps {
-  singleText: string;
-  onSingleTextChange: (text: string) => void;
-  chapters: Chapter[];
-  onChaptersChange: (chapters: Chapter[]) => void;
   pages: Page[];
   onPagesChange: (pages: Page[]) => void;
   onGeneratePage: (pageNumber: number, prompt: string) => Promise<void>;
@@ -30,14 +24,9 @@ interface EditorAreaProps {
   onImageUpload: (pageNumber: number, file: File) => Promise<void>;
   onDeletePage: (pageNumber: number) => Promise<void>;
   isSaving: boolean;
-  onSaveAllContent: () => Promise<void>; // New prop
 }
 
 export default function EditorArea({
-  singleText,
-  onSingleTextChange,
-  chapters,
-  onChaptersChange,
   pages,
   onPagesChange,
   onGeneratePage,
@@ -56,22 +45,14 @@ export default function EditorArea({
   onImageUpload,
   onDeletePage,
   isSaving,
-  onSaveAllContent,
 }: EditorAreaProps) {
 
-  const totalWords =
-    activeTab === 'single'
-      ? countWords(singleText)
-      : activeTab === 'chapters'
-      ? chapters.reduce((sum, chapter) => sum + countWords(chapter.content), 0)
-      : pages.reduce((sum, page) => sum + countWords(page.content), 0);
-
+  // Since Chapters/SingleText are removed, we calculate words based on existing pages content
+  const totalWords = pages.reduce((sum, page) => sum + countWords(page.content), 0);
   const estimatedPages = estimatePages(totalWords, fontSize);
 
   const isCoverTab = activeTab === 'front_cover' || activeTab === 'back_cover';
   
-  const isSaveAllEnabled = activeTab === 'chapters' || activeTab === 'single';
-
   return (
     <div className="flex-1 flex flex-col bg-gray-50">
       <div className="bg-white border-b border-gray-200">
@@ -110,40 +91,10 @@ export default function EditorArea({
               <BookOpenText className="w-4 h-4" />
               Back Cover
             </button>
-            <button
-              onClick={() => onTabChange('chapters')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
-                activeTab === 'chapters'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <BookOpen className="w-4 h-4" />
-              Chapters
-            </button>
-            <button
-              onClick={() => onTabChange('single')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors flex-shrink-0 ${
-                activeTab === 'single'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              Single Text
-            </button>
           </div>
           
           <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-            <button
-              onClick={onSaveAllContent}
-              disabled={isSaving || isGenerating || !isSaveAllEnabled}
-              className="flex items-center gap-2 px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
-              title="Save content from Chapters or Single Text tab to book pages"
-            >
-              <Save className="w-5 h-5" />
-              {isSaving ? 'Saving...' : 'Save All Content'}
-            </button>
+            {/* Removed Save All Content button */}
             
             <button
               onClick={onGeneratePDF}
@@ -160,28 +111,22 @@ export default function EditorArea({
       <div className="flex-1 p-6 overflow-hidden">
         <div className="h-full flex flex-col">
           <div className="flex-1 overflow-hidden mb-4">
-            {activeTab === 'single' ? (
-              <SingleTextEditor content={singleText} onChange={onSingleTextChange} />
-            ) : activeTab === 'chapters' ? (
-              <ChaptersEditor chapters={chapters} onChange={onChaptersChange} />
-            ) : (
-              <PagesEditor
-                pages={pages}
-                onChange={onPagesChange}
-                onGeneratePage={onGeneratePage}
-                onGenerateImage={onGenerateImage}
-                onEditImage={onEditImage}
-                bookPrompt={bookPrompt}
-                currentPageNumber={isCoverTab ? (activeTab === 'front_cover' ? 0 : targetPages + 1) : currentPageNumber}
-                onPageChange={onPageChange}
-                onSavePageContent={onSavePageContent}
-                onImageUpload={onImageUpload}
-                onDeletePage={onDeletePage}
-                isSaving={isSaving}
-                isCoverPage={isCoverTab}
-                maxPageNumber={targetPages}
-              />
-            )}
+            <PagesEditor
+              pages={pages}
+              onChange={onPagesChange}
+              onGeneratePage={onGeneratePage}
+              onGenerateImage={onGenerateImage}
+              onEditImage={onEditImage}
+              bookPrompt={bookPrompt}
+              currentPageNumber={isCoverTab ? (activeTab === 'front_cover' ? 0 : targetPages + 1) : currentPageNumber}
+              onPageChange={onPageChange}
+              onSavePageContent={onSavePageContent}
+              onImageUpload={onImageUpload}
+              onDeletePage={onDeletePage}
+              isSaving={isSaving}
+              isCoverPage={isCoverTab}
+              maxPageNumber={targetPages}
+            />
           </div>
 
           <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-center justify-between">

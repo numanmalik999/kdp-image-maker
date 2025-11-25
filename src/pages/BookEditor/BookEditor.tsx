@@ -5,8 +5,7 @@ import EditorArea from '../../components/EditorArea';
 import BookSettingsModal from '../../components/BookSettingsModal';
 import ExportModal from '../../components/ExportModal';
 import ImageEditorModal from '../../components/ImageEditorModal';
-import { BookSettings, Chapter, Page } from '../../types';
-import { SAMPLE_CHAPTERS, SAMPLE_SINGLE_TEXT } from '../../utils/sampleContent';
+import { BookSettings, Page, EditorTab } from '../../types';
 import { generatePDF } from '../../utils/pdfGenerator';
 import { generateEPUB } from '../../utils/epubGenerator';
 import { SUPABASE_URL } from '../../lib/config';
@@ -15,8 +14,6 @@ import { SUPABASE_URL } from '../../lib/config';
 import useBookData from '../../hooks/useBookData';
 import useBookPersistence from '../../hooks/useBookPersistence';
 import useBookGeneration from '../../hooks/useBookGeneration';
-
-type EditorTab = 'single' | 'chapters' | 'pages' | 'front_cover' | 'back_cover';
 
 export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const { bookId } = useParams<{ bookId: string }>();
@@ -28,10 +25,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const [activeTab, setActiveTab] = useState<EditorTab>('pages');
   const [currentPageNumber, setCurrentPageNumber] = useState(1);
 
-  // Content states (managed locally, updated by generation/persistence hooks)
-  const [singleText, setSingleText] = useState('');
-  const [chapters, setChapters] = useState<Chapter[]>([]);
-  
   // Modal states
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -39,7 +32,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const [imageToEdit, setImageToEdit] = useState<{ src: string; pageNumber: number } | null>(null);
 
   // --- Hooks ---
-  const { book, pages, loading, setBook, setPages, loadBook } = useBookData(bookId, onBack);
+  const { book, pages, loading, setBook, setPages } = useBookData(bookId, onBack);
   
   const {
     handleSaveSettings,
@@ -47,7 +40,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     handleImageUpload,
     handleDeletePage,
     handleImageEditComplete,
-    handleSaveAllContent, // New function
   } = useBookPersistence({
     bookId: bookId || '',
     book,
@@ -58,7 +50,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   });
 
   const {
-    handleAIGenerateBook,
     handleGeneratePage,
     handleGenerateImage,
   } = useBookGeneration({
@@ -67,8 +58,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     pages,
     setBook,
     setPages,
-    setChapters,
-    setSingleText,
     setIsGeneratingAI,
   });
 
@@ -99,26 +88,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
 
   const handlePagesChange = (newPages: Page[]) => {
     setPages(newPages);
-  };
-
-  const handleInsertSample = () => {
-    setChapters(SAMPLE_CHAPTERS);
-    setSingleText(SAMPLE_SINGLE_TEXT);
-    setActiveTab('chapters');
-    alert('Sample story inserted into Chapters tab.');
-  };
-  
-  const handleSaveAllContentWrapper = async () => {
-    if (activeTab === 'chapters') {
-      await handleSaveAllContent(activeTab, chapters);
-    } else if (activeTab === 'single') {
-      await handleSaveAllContent(activeTab, singleText);
-    } else {
-      alert('Saving for this tab is handled automatically or via the specific Save Page Content button.');
-      return;
-    }
-    // After saving, reload the book data to ensure the pages array is updated from DB
-    await loadBook();
   };
 
   // --- Export Handlers ---
@@ -242,10 +211,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
 
       <div className="flex-1 overflow-y-auto">
         <EditorArea
-          singleText={singleText}
-          onSingleTextChange={setSingleText}
-          chapters={chapters}
-          onChaptersChange={setChapters}
           pages={pages}
           onPagesChange={handlePagesChange}
           onGeneratePage={handleGeneratePage}
@@ -264,7 +229,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           onImageUpload={handleImageUpload}
           onDeletePage={handleDeletePageWrapper}
           isSaving={isSaving}
-          onSaveAllContent={handleSaveAllContentWrapper} // Pass new save function
         />
       </div>
 
@@ -274,8 +238,8 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
         settings={currentSettings}
         onSave={handleSaveSettings}
         isSaving={isSaving}
-        onInsertSample={handleInsertSample}
-        onAIGenerate={handleAIGenerateBook}
+        onInsertSample={() => alert('Sample insertion removed. Use AI generation or manual input.')}
+        onAIGenerate={() => alert('Full book AI generation removed. Use page-level generation.')}
         isGeneratingAI={isGeneratingAI}
         bookPrompt={book.book_prompt || ''}
       />

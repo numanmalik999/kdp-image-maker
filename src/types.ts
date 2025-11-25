@@ -1,6 +1,7 @@
 export type TrimSize = '6x9' | '5x8' | '8.5x11';
 export type FontSize = 10 | 11 | 12;
 export type PageActivityType = 'coloring' | 'tracing' | 'story' | 'maze' | 'dot-to-dot' | 'image';
+export type EditorTab = 'pages' | 'front_cover' | 'back_cover';
 
 export interface BookSettings {
   title: string;
