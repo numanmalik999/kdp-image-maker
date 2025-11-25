@@ -46,8 +46,6 @@ export default function useBookPersistence({
     }
   };
   
-  // handleSaveAllContent and splitTextIntoPages removed as bulk content tabs were removed.
-
   const handleSavePageContent = async (pageNumber: number, content: string, activityTypes: PageActivityType[]) => {
     if (!bookId) return;
     setIsSaving(true);
@@ -88,7 +86,7 @@ export default function useBookPersistence({
           pageNumber,
           content,
           imageUrl: imageUrlToSave,
-          activityTypes: activityTypes,
+          activityTypes: activityTypes, // <-- Ensure we use the latest activityTypes array
         };
         
         if (index >= 0) {
