@@ -509,10 +509,18 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
   };
 
   const handleSwitchToFrontCover = () => {
+    // Initialize frontCover if null
+    if (!frontCover) {
+      setFrontCover({ id: 'front-cover', pageNumber: 0, content: '', activityType: 'image' });
+    }
     setViewMode('front-cover');
   };
 
   const handleSwitchToBackCover = () => {
+    // Initialize backCover if null
+    if (!backCover) {
+      setBackCover({ id: 'back-cover', pageNumber: -1, content: '', activityType: 'image' });
+    }
     setViewMode('back-cover');
   };
 

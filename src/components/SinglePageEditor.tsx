@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, ChevronLeft, ChevronRight, Edit2, Plus, PlusCircle, CheckCircle, FileText, Image as ImageIcon, Upload, Settings, ArrowLeft } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Edit2, Plus, PlusCircle, CheckCircle, FileText, Image as ImageIcon, Upload, Settings, ArrowLeft, Crop as CropIcon } from 'lucide-react';
 import { PageActivityType } from '../types';
 
 interface SinglePageEditorProps {

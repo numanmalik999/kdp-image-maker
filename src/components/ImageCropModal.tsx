@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import ReactCrop, { Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import { X, Crop as CropIcon, Save, Loader2 } from 'lucide-react';
+import { X, Save, Loader2 } from 'lucide-react';
 
 interface ImageCropModalProps {
   isOpen: boolean;

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
-import { BookSettings, TrimSize, FontSize } from '../types';
+import { BookSettings } from '../types';
 
 interface BookSettingsModalProps {
   isOpen: boolean;
