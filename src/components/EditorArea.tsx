@@ -14,7 +14,7 @@ interface EditorAreaProps {
   onPagesChange: (pages: Page[]) => void;
   onGeneratePage: (pageNumber: number, prompt: string) => Promise<void>;
   onGenerateImage: (pageNumber: number, prompt: string) => Promise<void>;
-  onEditImage: (pageNumber: number) => void; // Added missing prop
+  onEditImage: (pageNumber: number) => void;
   fontSize: number;
   onGeneratePDF: () => void;
   isGenerating: boolean;
@@ -22,6 +22,8 @@ interface EditorAreaProps {
   onTabChange: (tab: 'single' | 'chapters' | 'pages') => void;
   targetPages: number;
   bookPrompt: string;
+  currentPageNumber: number;
+  onPageChange: (newPageNumber: number) => void;
 }
 
 export default function EditorArea({
@@ -33,7 +35,7 @@ export default function EditorArea({
   onPagesChange,
   onGeneratePage,
   onGenerateImage,
-  onEditImage, // Destructure the new prop
+  onEditImage,
   fontSize,
   onGeneratePDF,
   isGenerating,
@@ -41,6 +43,8 @@ export default function EditorArea({
   onTabChange,
   targetPages,
   bookPrompt,
+  currentPageNumber,
+  onPageChange,
 }: EditorAreaProps) {
 
   const totalWords =
@@ -115,9 +119,11 @@ export default function EditorArea({
                 onChange={onPagesChange}
                 onGeneratePage={onGeneratePage}
                 onGenerateImage={onGenerateImage}
-                onEditImage={onEditImage} // Passed down
+                onEditImage={onEditImage}
                 totalPages={targetPages}
                 bookPrompt={bookPrompt}
+                currentPageNumber={currentPageNumber}
+                onPageChange={onPageChange}
               />
             )}
           </div>

@@ -13,7 +13,7 @@ import { generateBookContent, convertToChapters, convertToSingleText, generatePa
 import { checkAICredits, decrementAICredits, incrementPageCount, incrementImageCount, checkPageCreationLimit } from '../../utils/subscriptionLimits';
 import { generatePDF } from '../../utils/pdfGenerator';
 import { generateEPUB } from '../../utils/epubGenerator';
-import { SUPABASE_URL } from '../../lib/config'; // Import SUPABASE_URL
+import { SUPABASE_URL } from '../../lib/config';
 
 // Define the structure of the book data fetched from Supabase
 interface BookData {
@@ -32,7 +32,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const { bookId } = useParams<{ bookId: string }>();
   const [book, setBook] = useState<BookData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false); // Corrected initialization
+  const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [activeTab, setActiveTab] = useState<'single' | 'chapters' | 'pages'>('pages');
@@ -41,6 +41,9 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const [singleText, setSingleText] = useState('');
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [pages, setPages] = useState<Page[]>([]);
+  
+  // New state for single page view
+  const [currentPageNumber, setCurrentPageNumber] = useState(1);
 
   // Modal states
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -72,9 +75,10 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       setBook(bookData);
       setPages(bookData.pages || []);
       
-      // Initialize content based on the active tab (defaulting to pages for coloring books)
-      // For simplicity, we won't try to reconstruct chapters/single text from pages yet.
-      // We assume the primary editing mode is 'pages'.
+      // Ensure currentPageNumber is valid
+      if (bookData.target_pages > 0) {
+        setCurrentPageNumber(1);
+      }
       
     } catch (error: any) {
       console.error('Error loading book:', error);
@@ -93,6 +97,10 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const handleSettingsChange = (newSettings: BookSettings) => {
     if (book) {
       setBook(prev => prev ? { ...prev, ...newSettings } : null);
+      // If target pages change, ensure current page is still valid
+      if (newSettings.targetPages < currentPageNumber) {
+        setCurrentPageNumber(newSettings.targetPages > 0 ? newSettings.targetPages : 1);
+      }
     }
   };
 
@@ -526,6 +534,8 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           onTabChange={setActiveTab}
           targetPages={book.target_pages}
           bookPrompt={book.book_prompt || ''}
+          currentPageNumber={currentPageNumber}
+          onPageChange={setCurrentPageNumber}
         />
       </div>
 

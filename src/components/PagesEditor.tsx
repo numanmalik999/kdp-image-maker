@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { Page, PageActivityType } from '../types';
-import { Sparkles, Loader2, Image as ImageIcon, Palette } from 'lucide-react';
+import { Sparkles, Loader2, Palette, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
 
 interface PagesEditorProps {
   pages: Page[];
-  onChange: (pages: Page[]) => void;
+  onChange: (pages: Page[]) => void; // Used to update page content/activities locally
   onGeneratePage: (pageNumber: number, prompt: string) => Promise<void>;
   onGenerateImage: (pageNumber: number, prompt: string) => Promise<void>;
-  onEditImage: (pageNumber: number) => void; // New prop
+  onEditImage: (pageNumber: number) => void;
   totalPages: number;
   bookPrompt: string;
+  currentPageNumber: number;
+  onPageChange: (newPageNumber: number) => void;
 }
 
 const ACTIVITY_OPTIONS: { value: PageActivityType; label: string }[] = [
@@ -21,259 +23,269 @@ const ACTIVITY_OPTIONS: { value: PageActivityType; label: string }[] = [
   { value: 'image', label: 'Full Page Image' },
 ];
 
-export default function PagesEditor({ pages, onChange, onGeneratePage, onGenerateImage, onEditImage, totalPages, bookPrompt }: PagesEditorProps) {
-  const [generatingPages, setGeneratingPages] = useState<Set<number>>(new Set());
-  const [generatingImages, setGeneratingImages] = useState<Set<number>>(new Set());
-  const [pagePrompts, setPagePrompts] = useState<Record<number, string>>({});
-  const [pageActivities, setPageActivities] = useState<Record<number, PageActivityType[]>>({});
+export default function PagesEditor({ 
+  pages, 
+  onChange, 
+  onGeneratePage, 
+  onGenerateImage, 
+  onEditImage, 
+  totalPages, 
+  bookPrompt,
+  currentPageNumber,
+  onPageChange,
+}: PagesEditorProps) {
+  
+  const existingPage = pages.find(p => p.pageNumber === currentPageNumber);
+  
+  const [pagePrompt, setPagePrompt] = useState(bookPrompt);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  // Initialize page activities from loaded pages
+  // Initialize prompt based on bookPrompt or existing page data
   useEffect(() => {
-    const initialActivities: Record<number, PageActivityType[]> = {};
-    pages.forEach(p => {
-      if (p.activityTypes && p.activityTypes.length > 0) {
-        initialActivities[p.pageNumber] = p.activityTypes;
-      }
-    });
-    setPageActivities(initialActivities);
-  }, [pages]);
+    // If the page exists, we might want to load a specific prompt if we stored it, 
+    // but for simplicity, we default to bookPrompt for the input field.
+    setPagePrompt(bookPrompt);
+  }, [bookPrompt, currentPageNumber]);
 
-  const updatePageContent = (pageNumber: number, content: string) => {
-    const updatedPages = [...pages];
-    const pageIndex = updatedPages.findIndex(p => p.pageNumber === pageNumber);
-
-    const currentActivities = pageActivities[pageNumber] || ['story'];
-
-    if (pageIndex >= 0) {
-      updatedPages[pageIndex] = { ...updatedPages[pageIndex], content, activityTypes: currentActivities };
-    } else {
-      updatedPages.push({
-        id: `page-${pageNumber}`,
-        pageNumber,
-        content,
-        activityTypes: currentActivities,
-      });
-    }
-
-    updatedPages.sort((a, b) => a.pageNumber - b.pageNumber);
-    onChange(updatedPages);
+  const currentPage: Page = existingPage || {
+    id: `temp-${currentPageNumber}`,
+    pageNumber: currentPageNumber,
+    content: '',
+    activityTypes: ['coloring'],
   };
 
-  const updatePageActivities = (pageNumber: number, activity: PageActivityType) => {
-    setPageActivities(prev => {
-      const current = prev[pageNumber] || [];
-      let newActivities: PageActivityType[];
+  const currentActivities = currentPage.activityTypes || ['coloring'];
+  const hasTextActivity = currentActivities.includes('story') || currentActivities.includes('tracing');
+  const hasImageActivity = currentActivities.includes('coloring') || currentActivities.includes('maze') || currentActivities.includes('dot-to-dot') || currentActivities.includes('image');
 
-      if (current.includes(activity)) {
-        newActivities = current.filter(a => a !== activity);
-      } else {
-        newActivities = [...current, activity];
-      }
-      
-      // Ensure at least one activity is selected if possible, or default to coloring/story
-      if (newActivities.length === 0) {
-        newActivities = ['coloring'];
-      }
-
-      // Update local page state immediately to reflect activity change
-      const updatedPages = pages.map(p => 
-        p.pageNumber === pageNumber ? { ...p, activityTypes: newActivities } : p
-      );
-      onChange(updatedPages);
-
-      return { ...prev, [pageNumber]: newActivities };
-    });
-  };
-
-  const handleGeneratePage = async (pageNumber: number) => {
-    const prompt = pagePrompts[pageNumber] || bookPrompt;
-    if (!prompt.trim()) {
-      alert('Please enter a prompt for this page or set a book description in the AI generator.');
-      return;
-    }
-
-    setGeneratingPages(prev => new Set(prev).add(pageNumber));
-    try {
-      await onGeneratePage(pageNumber, prompt);
-    } finally {
-      setGeneratingPages(prev => {
-        const next = new Set(prev);
-        next.delete(pageNumber);
-        return next;
-      });
-    }
-  };
-
-  const handleGenerateImage = async (pageNumber: number) => {
-    const prompt = pagePrompts[pageNumber] || bookPrompt;
-    if (!prompt.trim()) {
-      alert('Please enter a prompt for this page or set a book description in the AI generator.');
-      return;
-    }
-
-    setGeneratingImages(prev => new Set(prev).add(pageNumber));
-    try {
-      await onGenerateImage(pageNumber, prompt);
-    } finally {
-      setGeneratingImages(prev => {
-        const next = new Set(prev);
-        next.delete(pageNumber);
-        return next;
-      });
-    }
-  };
-
-  const getPageContent = (pageNumber: number): string => {
-    const page = pages.find(p => p.pageNumber === pageNumber);
-    return page?.content || '';
-  };
-
-  const getPageImage = (pageNumber: number): string | undefined => {
-    const page = pages.find(p => p.pageNumber === pageNumber);
-    return page?.imageUrl;
-  };
-
-  const renderPage = (pageNumber: number) => {
-    const isGeneratingText = generatingPages.has(pageNumber);
-    const isGeneratingImage = generatingImages.has(pageNumber);
-    const content = getPageContent(pageNumber);
-    const imageUrl = getPageImage(pageNumber);
-    const pagePrompt = pagePrompts[pageNumber] || '';
-    const currentActivities = pageActivities[pageNumber] || pages.find(p => p.pageNumber === pageNumber)?.activityTypes || ['coloring'];
+  const updatePageActivities = (activity: PageActivityType) => {
+    let newActivities: PageActivityType[];
     
-    const hasTextActivity = currentActivities.includes('story') || currentActivities.includes('tracing');
-    const hasImageActivity = currentActivities.includes('coloring') || currentActivities.includes('maze') || currentActivities.includes('dot-to-dot') || currentActivities.includes('image');
+    if (currentActivities.includes(activity)) {
+      newActivities = currentActivities.filter(a => a !== activity);
+    } else {
+      newActivities = [...currentActivities, activity];
+    }
+    
+    if (newActivities.length === 0) {
+      newActivities = ['coloring']; // Default fallback
+    }
+
+    // Update local page state
+    const updatedPages = pages.map(p => 
+      p.pageNumber === currentPageNumber ? { ...p, activityTypes: newActivities } : p
+    );
+    
+    if (!existingPage) {
+        updatedPages.push({ ...currentPage, activityTypes: newActivities });
+    }
+
+    onChange(updatedPages.sort((a, b) => a.pageNumber - b.pageNumber));
+  };
+
+  const handleGenerate = async () => {
+    const prompt = pagePrompt.trim() || bookPrompt.trim();
+    if (!prompt) {
+      alert('Please enter a prompt or set a book description in the sidebar.');
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      // We run both generation types sequentially if both activities are selected
+      if (hasTextActivity) {
+        await onGeneratePage(currentPageNumber, prompt);
+      }
+      if (hasImageActivity) {
+        await onGenerateImage(currentPageNumber, prompt);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newContent = e.target.value;
+    
+    const newPage: Page = {
+      ...currentPage,
+      content: newContent,
+      activityTypes: currentActivities,
+    };
+
+    const updatedPages = pages.map(p => 
+      p.pageNumber === currentPageNumber ? newPage : p
+    );
+    
+    if (!existingPage) {
+        updatedPages.push(newPage);
+    }
+    
+    onChange(updatedPages.sort((a, b) => a.pageNumber - b.pageNumber));
+  };
+
+  const handleNext = () => {
+    if (currentPageNumber < totalPages) {
+      onPageChange(currentPageNumber + 1);
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentPageNumber > 1) {
+      onPageChange(currentPageNumber - 1);
+    }
+  };
+
+  const renderActivitySelector = () => (
+    <div className="mb-4">
+      <label className="block text-sm font-medium text-gray-700 mb-1">Activity Type:</label>
+      <div className="flex flex-wrap gap-2">
+        {ACTIVITY_OPTIONS.map(option => (
+          <button
+            key={option.value}
+            onClick={() => updatePageActivities(option.value)}
+            className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+              currentActivities.includes(option.value)
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+            disabled={isGenerating}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderPreview = () => {
+    if (isGenerating) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full bg-gray-100 rounded-lg">
+          <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
+          <p className="text-lg font-medium text-gray-700">Generating Page {currentPageNumber}...</p>
+          <p className="text-sm text-gray-500 mt-1">This may take a moment.</p>
+        </div>
+      );
+    }
+
+    if (currentPage.imageUrl || (currentPage.content && hasTextActivity)) {
+      return (
+        <div className="h-full overflow-y-auto p-6 bg-white rounded-lg shadow-inner border border-gray-200">
+          {currentPage.imageUrl && hasImageActivity && (
+            <div className="relative mb-4 border border-gray-300 rounded-lg overflow-hidden">
+              <img 
+                src={currentPage.imageUrl} 
+                alt={`Page ${currentPageNumber} image`} 
+                className="w-full h-auto object-contain"
+              />
+              <button
+                onClick={() => onEditImage(currentPageNumber)}
+                className="absolute top-2 right-2 p-2 bg-white/80 text-gray-800 rounded-full shadow-md transition-opacity hover:bg-white"
+                title="Edit Image"
+              >
+                <Palette className="w-5 h-5" />
+              </button>
+            </div>
+          )}
+          {hasTextActivity && (
+            <textarea
+              value={currentPage.content}
+              onChange={handleContentChange}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-serif text-base min-h-[200px]"
+              rows={10}
+              placeholder="Page content..."
+            />
+          )}
+        </div>
+      );
+    }
 
     return (
-      <div key={pageNumber} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-semibold text-gray-700">Page {pageNumber}</span>
-        </div>
-
-        {/* Activity Selector */}
-        <div className="mb-4">
-          <label className="block text-xs font-medium text-gray-700 mb-1">Page Type:</label>
-          <div className="flex flex-wrap gap-2">
-            {ACTIVITY_OPTIONS.map(option => (
-              <button
-                key={option.value}
-                onClick={() => updatePageActivities(pageNumber, option.value)}
-                className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                  currentActivities.includes(option.value)
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* AI Generation Block */}
-        {(hasTextActivity || hasImageActivity) && (
-          <div className="mb-3 bg-purple-50 border border-purple-200 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-4 h-4 text-purple-600" />
-              <span className="text-xs font-medium text-purple-900">AI Generate</span>
-            </div>
-            <input
-              type="text"
-              value={pagePrompt}
-              onChange={(e) => setPagePrompts(prev => ({ ...prev, [pageNumber]: e.target.value }))}
-              className="w-full px-2 py-1.5 text-sm border border-purple-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-2"
-              placeholder={bookPrompt || "What should this page be about?"}
-              disabled={isGeneratingText || isGeneratingImage}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              {hasTextActivity && (
-                <button
-                  onClick={() => handleGeneratePage(pageNumber)}
-                  disabled={isGeneratingText}
-                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isGeneratingText ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Text...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      Text
-                    </>
-                  )}
-                </button>
-              )}
-              {hasImageActivity && (
-                <button
-                  onClick={() => handleGenerateImage(pageNumber)}
-                  disabled={isGeneratingImage}
-                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isGeneratingImage ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Image...
-                    </>
-                  ) : (
-                    <>
-                      <ImageIcon className="w-4 h-4" />
-                      Image
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Image Display and Editor Button */}
-        {imageUrl && hasImageActivity && (
-          <div className="mb-3 relative group">
-            <img
-              src={imageUrl}
-              alt={`Page ${pageNumber} coloring image`}
-              className="w-full h-auto rounded-lg border border-gray-300"
-            />
-            <button
-              onClick={() => onEditImage(pageNumber)}
-              className="absolute top-2 right-2 p-2 bg-white/80 text-gray-800 rounded-full shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
-              title="Edit Image"
-            >
-              <Palette className="w-5 h-5" />
-            </button>
-          </div>
-        )}
-
-        {/* Text Content Area */}
-        {hasTextActivity && (
-          <textarea
-            value={content}
-            onChange={(e) => updatePageContent(pageNumber, e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-serif text-sm"
-            rows={hasImageActivity ? 6 : 12}
-            placeholder="Page content will appear here after generation, or type your own..."
-          />
-        )}
+      <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
+        <Pencil className="w-12 h-12 text-gray-400 mb-4" />
+        <h3 className="text-xl font-medium mb-2">Page {currentPageNumber}: Ready to Generate</h3>
+        <p>Enter your prompt and click 'Generate' to begin!</p>
       </div>
     );
   };
 
-  const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1);
-
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-y-auto space-y-4">
-        {pageNumbers.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <p className="mb-4">Set a target page count in the sidebar to get started.</p>
+    <div className="h-full grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden">
+      {/* Left Sidebar (Controls) */}
+      <div className="lg:col-span-1 flex flex-col bg-white p-6 border border-gray-200 rounded-lg shadow-sm overflow-y-auto">
+        <h2 className="text-xl font-bold text-gray-900 mb-4">Page {currentPageNumber} of {totalPages}</h2>
+
+        {renderActivitySelector()}
+
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Prompt for Page {currentPageNumber}
+          </label>
+          <textarea
+            value={pagePrompt}
+            onChange={(e) => setPagePrompt(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
+            rows={3}
+            placeholder={bookPrompt || "Describe the content or image for this page..."}
+            disabled={isGenerating}
+          />
+        </div>
+
+        <button
+          onClick={handleGenerate}
+          disabled={isGenerating || (!pagePrompt.trim() && !bookPrompt.trim())}
+          className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-6"
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="w-5 h-5 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-5 h-5" />
+              Generate Page {currentPageNumber}
+            </>
+          )}
+        </button>
+
+        {/* Navigation */}
+        <div className="flex justify-between items-center mb-6 pt-4 border-t border-gray-100">
+          <button
+            onClick={handlePrevious}
+            disabled={currentPageNumber <= 1 || isGenerating}
+            className="flex items-center gap-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            Previous Page
+          </button>
+          <div className="text-sm text-gray-600">
+            Book Progress: {pages.length} Pages
           </div>
-        ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {pageNumbers.map(pageNumber => renderPage(pageNumber))}
-          </div>
-        )}
+          <button
+            onClick={handleNext}
+            disabled={currentPageNumber >= totalPages || isGenerating}
+            className="flex items-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+          >
+            Next Page
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="mt-auto pt-4 border-t border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">Generated Pages History:</h3>
+          <p className="text-xs text-gray-500">
+            History feature coming soon.
+          </p>
+        </div>
+      </div>
+
+      {/* Right Content Area (Preview) */}
+      <div className="lg:col-span-2 h-full flex flex-col">
+        {renderPreview()}
       </div>
     </div>
   );
