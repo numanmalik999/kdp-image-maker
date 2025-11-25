@@ -39,7 +39,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const [imageToEdit, setImageToEdit] = useState<{ src: string; pageNumber: number } | null>(null);
 
   // --- Hooks ---
-  const { book, pages, loading, setBook, setPages } = useBookData(bookId, onBack);
+  const { book, pages, loading, setBook, setPages, loadBook } = useBookData(bookId, onBack);
   
   const {
     handleSaveSettings,
@@ -47,6 +47,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     handleImageUpload,
     handleDeletePage,
     handleImageEditComplete,
+    handleSaveAllContent, // New function
   } = useBookPersistence({
     bookId: bookId || '',
     book,
@@ -105,6 +106,19 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     setSingleText(SAMPLE_SINGLE_TEXT);
     setActiveTab('chapters');
     alert('Sample story inserted into Chapters tab.');
+  };
+  
+  const handleSaveAllContentWrapper = async () => {
+    if (activeTab === 'chapters') {
+      await handleSaveAllContent(activeTab, chapters);
+    } else if (activeTab === 'single') {
+      await handleSaveAllContent(activeTab, singleText);
+    } else {
+      alert('Saving for this tab is handled automatically or via the specific Save Page Content button.');
+      return;
+    }
+    // After saving, reload the book data to ensure the pages array is updated from DB
+    await loadBook();
   };
 
   // --- Export Handlers ---
@@ -250,6 +264,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           onImageUpload={handleImageUpload}
           onDeletePage={handleDeletePageWrapper}
           isSaving={isSaving}
+          onSaveAllContent={handleSaveAllContentWrapper} // Pass new save function
         />
       </div>
 

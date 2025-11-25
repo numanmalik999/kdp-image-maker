@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { BookSettings, Page } from '../types';
+import { BookSettings, Page, Chapter } from '../types';
 import { BookData } from './useBookData';
 
 interface UseBookPersistenceProps {
@@ -44,6 +44,88 @@ export default function useBookPersistence({
     } catch (error: any) {
       console.error('Error saving settings:', error);
       alert('Failed to save settings.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  // Helper function to split text into pages (simple implementation)
+  const splitTextIntoPages = (text: string, targetPages: number): string[] => {
+    const paragraphs = text.split(/\n\s*\n/);
+    const totalParagraphs = paragraphs.length;
+    if (totalParagraphs === 0) return [];
+    
+    const paragraphsPerPage = Math.ceil(totalParagraphs / targetPages);
+    const result: string[] = [];
+    
+    for (let i = 0; i < targetPages; i++) {
+      const start = i * paragraphsPerPage;
+      const end = Math.min((i + 1) * paragraphsPerPage, totalParagraphs);
+      if (start < totalParagraphs) {
+        result.push(paragraphs.slice(start, end).join('\n\n'));
+      }
+    }
+    return result;
+  };
+
+  const handleSaveAllContent = async (activeTab: EditorTab, content: string | Chapter[]) => {
+    if (!book || !bookId) return;
+    setIsSaving(true);
+    
+    try {
+      let pageContents: string[] = [];
+      
+      if (activeTab === 'single' && typeof content === 'string') {
+        pageContents = splitTextIntoPages(content, book.target_pages);
+      } else if (activeTab === 'chapters' && Array.isArray(content)) {
+        const fullText = content.map(ch => `${ch.title}\n\n${ch.content}`).join('\n\n\n');
+        pageContents = splitTextIntoPages(fullText, book.target_pages);
+      } else {
+        // If we are on 'pages' tab, saving is handled by handleSavePageContent
+        alert('Use the Save Page Content button for individual pages.');
+        return;
+      }
+      
+      if (pageContents.length === 0) {
+        alert('No content to save.');
+        return;
+      }
+      
+      const newPageRecords = pageContents.map((content, index) => {
+        const pageNumber = index + 1;
+        const existingPage = pages.find(p => p.pageNumber === pageNumber);
+        
+        return {
+          book_id: bookId,
+          page_number: pageNumber,
+          content: content,
+          // Preserve existing image/activity type if it exists, otherwise default to story
+          activity_type: existingPage?.activityTypes?.[0] || 'story',
+          image_url: existingPage?.imageUrl,
+          is_front_cover: false,
+          is_back_cover: false,
+        };
+      });
+      
+      // 1. Upsert all content pages (1 to target_pages)
+      const { error: upsertError } = await supabase
+        .from('book_pages')
+        .upsert(newPageRecords, { onConflict: 'book_id, page_number' });
+
+      if (upsertError) throw upsertError;
+      
+      // 2. Reload the book data to get the updated pages and ensure local state is consistent
+      // Note: We rely on the caller (BookEditor) to trigger a full reload via loadBook if necessary, 
+      // but for immediate feedback, we update the local pages state based on the upserted data.
+      
+      // For simplicity and consistency, we'll rely on the caller to reload the data 
+      // or manually update the pages array if needed. For now, we just alert success.
+      
+      alert('All content saved successfully!');
+      
+    } catch (error: any) {
+      console.error('Error saving all content:', error);
+      alert(`Failed to save all content: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -313,5 +395,6 @@ export default function useBookPersistence({
     handleImageUpload,
     handleDeletePage,
     handleImageEditComplete,
+    handleSaveAllContent,
   };
 }

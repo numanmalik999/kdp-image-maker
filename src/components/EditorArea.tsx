@@ -1,5 +1,5 @@
 import { Chapter, Page } from '../types';
-import { FileText, BookOpen, Download, FileStack, BookOpenCheck, BookOpenText } from 'lucide-react';
+import { FileText, BookOpen, Download, FileStack, BookOpenCheck, BookOpenText, Save } from 'lucide-react';
 import SingleTextEditor from './SingleTextEditor';
 import ChaptersEditor from './ChaptersEditor';
 import PagesEditor from './PagesEditor';
@@ -30,6 +30,7 @@ interface EditorAreaProps {
   onImageUpload: (pageNumber: number, file: File) => Promise<void>;
   onDeletePage: (pageNumber: number) => Promise<void>;
   isSaving: boolean;
+  onSaveAllContent: () => Promise<void>; // New prop
 }
 
 export default function EditorArea({
@@ -55,6 +56,7 @@ export default function EditorArea({
   onImageUpload,
   onDeletePage,
   isSaving,
+  onSaveAllContent,
 }: EditorAreaProps) {
 
   const totalWords =
@@ -67,6 +69,8 @@ export default function EditorArea({
   const estimatedPages = estimatePages(totalWords, fontSize);
 
   const isCoverTab = activeTab === 'front_cover' || activeTab === 'back_cover';
+  
+  const isSaveAllEnabled = activeTab === 'chapters' || activeTab === 'single';
 
   return (
     <div className="flex-1 flex flex-col bg-gray-50">
@@ -129,14 +133,27 @@ export default function EditorArea({
               Single Text
             </button>
           </div>
-          <button
-            onClick={onGeneratePDF}
-            disabled={isGenerating || totalWords === 0}
-            className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex-shrink-0 ml-4"
-          >
-            <Download className="w-5 h-5" />
-            {isGenerating ? 'Generating...' : 'Generate KDP PDF'}
-          </button>
+          
+          <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+            <button
+              onClick={onSaveAllContent}
+              disabled={isSaving || isGenerating || !isSaveAllEnabled}
+              className="flex items-center gap-2 px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+              title="Save content from Chapters or Single Text tab to book pages"
+            >
+              <Save className="w-5 h-5" />
+              {isSaving ? 'Saving...' : 'Save All Content'}
+            </button>
+            
+            <button
+              onClick={onGeneratePDF}
+              disabled={isGenerating || totalWords === 0}
+              className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              <Download className="w-5 h-5" />
+              {isGenerating ? 'Generating...' : 'Generate KDP PDF'}
+            </button>
+          </div>
         </div>
       </div>
 
