@@ -138,9 +138,7 @@ export default function SinglePageEditor({
       setIsUploading(true);
       try {
         await onUploadImage(file);
-        // Set activity type to 'image' automatically upon upload
-        setActivityType('image');
-        onUpdateContent(editedContent, 'image');
+        // NOTE: Parent component (BookEditor) handles updating page state with imageUrl and activityType: 'image'
       } catch (error) {
         console.error('Upload failed:', error);
         alert('Image upload failed. Please try again.');
