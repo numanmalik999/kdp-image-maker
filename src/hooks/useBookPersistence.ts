@@ -188,8 +188,10 @@ export default function useBookPersistence({
         .getPublicUrl(filename);
 
       const newImageUrl = publicUrlData.publicUrl;
-      const existingPage = pages.find(p => p.pageNumber === pageNumber);
-      const activityTypes = existingPage?.activityTypes || ['image'];
+      
+      // Find the current page state to get the latest content and activity types
+      const currentPageState = pages.find(p => p.pageNumber === pageNumber);
+      const activityTypes = currentPageState?.activityTypes || ['image'];
       
       const isFrontCover = pageNumber === 0;
       const isBackCover = book && pageNumber === book.target_pages + 1;
@@ -201,7 +203,7 @@ export default function useBookPersistence({
           book_id: bookId,
           page_number: pageNumber,
           image_url: newImageUrl,
-          content: existingPage?.content || '',
+          content: currentPageState?.content || '',
           activity_type: activityTypes[0] || 'image',
           is_front_cover: isFrontCover,
           is_back_cover: isBackCover,
@@ -216,11 +218,11 @@ export default function useBookPersistence({
       setPages(prev => {
         const index = prev.findIndex(p => p.pageNumber === pageNumber);
         const newPage: Page = {
-          id: existingPage?.id || `temp-${pageNumber}`,
+          id: currentPageState?.id || `temp-${pageNumber}`,
           pageNumber,
-          content: existingPage?.content || '',
+          content: currentPageState?.content || '',
           imageUrl: newImageUrl,
-          activityTypes: existingPage?.activityTypes,
+          activityTypes: activityTypes, // Use the determined activity types
         };
 
         if (index >= 0) {
