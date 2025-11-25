@@ -24,6 +24,10 @@ interface EditorAreaProps {
   bookPrompt: string;
   currentPageNumber: number;
   onPageChange: (newPageNumber: number) => void;
+  onSavePageContent: (pageNumber: number, content: string, activityTypes: string[]) => Promise<void>;
+  onImageUpload: (pageNumber: number, file: File) => Promise<void>;
+  onDeletePage: (pageNumber: number) => Promise<void>;
+  isSaving: boolean;
 }
 
 export default function EditorArea({
@@ -45,6 +49,10 @@ export default function EditorArea({
   bookPrompt,
   currentPageNumber,
   onPageChange,
+  onSavePageContent,
+  onImageUpload,
+  onDeletePage,
+  isSaving,
 }: EditorAreaProps) {
 
   const totalWords =
@@ -124,6 +132,10 @@ export default function EditorArea({
                 bookPrompt={bookPrompt}
                 currentPageNumber={currentPageNumber}
                 onPageChange={onPageChange}
+                onSavePageContent={onSavePageContent}
+                onImageUpload={onImageUpload}
+                onDeletePage={onDeletePage}
+                isSaving={isSaving}
               />
             )}
           </div>

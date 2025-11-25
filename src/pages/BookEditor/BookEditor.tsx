@@ -93,8 +93,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
 
   // --- Settings & Persistence ---
 
-  // Removed handleSettingsChange as it was unused.
-
   const handleSaveSettings = async (newSettings: BookSettings) => {
     if (!bookId) return;
     setIsSaving(true);
@@ -117,6 +115,154 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     } catch (error: any) {
       console.error('Error saving settings:', error);
       alert('Failed to save settings.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // --- Page Persistence Handlers ---
+
+  const handleSavePageContent = async (pageNumber: number, content: string, activityTypes: string[]) => {
+    if (!bookId) return;
+    setIsSaving(true);
+    try {
+      const existingPage = pages.find(p => p.pageNumber === pageNumber);
+      
+      const { error } = await supabase
+        .from('book_pages')
+        .upsert({
+          book_id: bookId,
+          page_number: pageNumber,
+          content: content,
+          activity_type: activityTypes[0] || 'story',
+          image_url: existingPage?.imageUrl,
+        }, { onConflict: 'book_id, page_number' });
+
+      if (error) throw error;
+
+      // Update local state
+      setPages(prev => {
+        const index = prev.findIndex(p => p.pageNumber === pageNumber);
+        const newPage: Page = {
+          id: existingPage?.id || `temp-${pageNumber}`,
+          pageNumber,
+          content,
+          imageUrl: existingPage?.imageUrl,
+          activityTypes: existingPage?.activityTypes,
+        };
+
+        if (index >= 0) {
+          const newPages = [...prev];
+          newPages[index] = newPage;
+          return newPages;
+        } else {
+          return [...prev, newPage].sort((a, b) => a.pageNumber - b.pageNumber);
+        }
+      });
+
+      alert('Page content saved!');
+    } catch (error: any) {
+      console.error('Error saving page content:', error);
+      alert('Failed to save page content.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleImageUpload = async (pageNumber: number, file: File) => {
+    if (!bookId) return;
+    setIsSaving(true);
+    try {
+      const filename = `${bookId}/${pageNumber}-${Date.now()}-${file.name}`;
+
+      // 1. Upload the image file to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('coloring_images')
+        .upload(filename, file, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: file.type,
+        });
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get the public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('coloring_images')
+        .getPublicUrl(filename);
+
+      const newImageUrl = publicUrlData.publicUrl;
+      const existingPage = pages.find(p => p.pageNumber === pageNumber);
+      const activityTypes = existingPage?.activityTypes || ['image'];
+
+      // 3. Update the page in the database
+      const { error: dbError } = await supabase
+        .from('book_pages')
+        .upsert({
+          book_id: bookId,
+          page_number: pageNumber,
+          image_url: newImageUrl,
+          content: existingPage?.content || '',
+          activity_type: activityTypes[0] || 'image',
+        }, { onConflict: 'book_id, page_number' });
+
+      if (dbError) throw dbError;
+
+      // 4. Update local state
+      setPages(prev => {
+        const index = prev.findIndex(p => p.pageNumber === pageNumber);
+        const newPage: Page = {
+          id: existingPage?.id || `temp-${pageNumber}`,
+          pageNumber,
+          content: existingPage?.content || '',
+          imageUrl: newImageUrl,
+          activityTypes: existingPage?.activityTypes,
+        };
+
+        if (index >= 0) {
+          const newPages = [...prev];
+          newPages[index] = newPage;
+          return newPages;
+        } else {
+          return [...prev, newPage].sort((a, b) => a.pageNumber - b.pageNumber);
+        }
+      });
+
+      alert('Image uploaded successfully!');
+    } catch (error: any) {
+      console.error('Image Upload Error:', error);
+      alert('Failed to upload image.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeletePage = async (pageNumber: number) => {
+    if (!bookId) return;
+    if (!confirm(`Are you sure you want to delete page ${pageNumber}?`)) return;
+
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('book_pages')
+        .delete()
+        .eq('book_id', bookId)
+        .eq('page_number', pageNumber);
+
+      if (error) throw error;
+
+      // Update local state
+      setPages(prev => prev.filter(p => p.pageNumber !== pageNumber));
+      
+      // If we deleted the current page, move to the previous one (or 1)
+      if (pageNumber === currentPageNumber) {
+        setCurrentPageNumber(prev => Math.max(1, prev - 1));
+      }
+
+      alert(`Page ${pageNumber} deleted successfully!`);
+    } catch (error: any) {
+      console.error('Error deleting page:', error);
+      alert('Failed to delete page.');
     } finally {
       setIsSaving(false);
     }
@@ -223,6 +369,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           page_number: pageNumber,
           content: content,
           activity_type: activityTypes[0] || 'story', // Use first activity type for DB column
+          image_url: existingPage?.imageUrl,
         }, { onConflict: 'book_id, page_number' });
 
       if (error) throw error;
@@ -293,6 +440,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           book_id: bookId,
           page_number: pageNumber,
           image_url: imageUrl,
+          content: existingPage?.content || '',
           activity_type: activityTypes[0] || 'coloring',
         }, { onConflict: 'book_id, page_number' });
 
@@ -519,6 +667,10 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           bookPrompt={book.book_prompt || ''}
           currentPageNumber={currentPageNumber}
           onPageChange={setCurrentPageNumber}
+          onSavePageContent={handleSavePageContent}
+          onImageUpload={handleImageUpload}
+          onDeletePage={handleDeletePage}
+          isSaving={isSaving}
         />
       </div>
 

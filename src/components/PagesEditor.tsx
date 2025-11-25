@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Page, PageActivityType } from '../types';
-import { Sparkles, Loader2, Palette, ChevronLeft, ChevronRight, Pencil } from 'lucide-react';
+import { Sparkles, Loader2, Palette, ChevronLeft, ChevronRight, Pencil, Save, Upload, Trash2 } from 'lucide-react';
 
 interface PagesEditorProps {
   pages: Page[];
@@ -12,6 +12,10 @@ interface PagesEditorProps {
   bookPrompt: string;
   currentPageNumber: number;
   onPageChange: (newPageNumber: number) => void;
+  onSavePageContent: (pageNumber: number, content: string, activityTypes: string[]) => Promise<void>;
+  onImageUpload: (pageNumber: number, file: File) => Promise<void>;
+  onDeletePage: (pageNumber: number) => Promise<void>;
+  isSaving: boolean;
 }
 
 const ACTIVITY_OPTIONS: { value: PageActivityType; label: string }[] = [
@@ -33,24 +37,33 @@ export default function PagesEditor({
   bookPrompt,
   currentPageNumber,
   onPageChange,
+  onSavePageContent,
+  onImageUpload,
+  onDeletePage,
+  isSaving,
 }: PagesEditorProps) {
   
   const existingPage = pages.find(p => p.pageNumber === currentPageNumber);
   
   const [pagePrompt, setPagePrompt] = useState(bookPrompt);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [localContent, setLocalContent] = useState(existingPage?.content || '');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync local content state when page changes
+  useEffect(() => {
+    setLocalContent(existingPage?.content || '');
+  }, [existingPage]);
 
   // Initialize prompt based on bookPrompt or existing page data
   useEffect(() => {
-    // If the page exists, we might want to load a specific prompt if we stored it, 
-    // but for simplicity, we default to bookPrompt for the input field.
     setPagePrompt(bookPrompt);
   }, [bookPrompt, currentPageNumber]);
 
   const currentPage: Page = existingPage || {
     id: `temp-${currentPageNumber}`,
     pageNumber: currentPageNumber,
-    content: '',
+    content: localContent,
     activityTypes: ['coloring'],
   };
 
@@ -86,7 +99,7 @@ export default function PagesEditor({
   const handleGenerate = async () => {
     const prompt = pagePrompt.trim() || bookPrompt.trim();
     if (!prompt) {
-      alert('Please enter a prompt or set a book description in the sidebar.');
+      alert('Please enter a prompt or set a book description in the settings modal.');
       return;
     }
 
@@ -106,9 +119,11 @@ export default function PagesEditor({
     }
   };
 
-  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleLocalContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
+    setLocalContent(newContent);
     
+    // Update local state immediately for responsiveness
     const newPage: Page = {
       ...currentPage,
       content: newContent,
@@ -124,6 +139,17 @@ export default function PagesEditor({
     }
     
     onChange(updatedPages.sort((a, b) => a.pageNumber - b.pageNumber));
+  };
+  
+  const handleSave = () => {
+    onSavePageContent(currentPageNumber, localContent, currentActivities);
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onImageUpload(currentPageNumber, file);
+    }
   };
 
   const handleNext = () => {
@@ -151,7 +177,7 @@ export default function PagesEditor({
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
-            disabled={isGenerating}
+            disabled={isGenerating || isSaving}
           >
             {option.label}
           </button>
@@ -171,7 +197,9 @@ export default function PagesEditor({
       );
     }
 
-    if (currentPage.imageUrl || (currentPage.content && hasTextActivity)) {
+    const hasContent = currentPage.imageUrl || (localContent && hasTextActivity);
+
+    if (hasContent) {
       return (
         <div className="h-full overflow-y-auto p-6 bg-white rounded-lg shadow-inner border border-gray-200">
           {currentPage.imageUrl && hasImageActivity && (
@@ -192,8 +220,8 @@ export default function PagesEditor({
           )}
           {hasTextActivity && (
             <textarea
-              value={currentPage.content}
-              onChange={handleContentChange}
+              value={localContent}
+              onChange={handleLocalContentChange}
               className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-serif text-base min-h-[200px]"
               rows={10}
               placeholder="Page content..."
@@ -205,7 +233,7 @@ export default function PagesEditor({
 
     return (
       <div className="flex flex-col items-center justify-center h-full text-center text-gray-500">
-        <Pencil className="w-12 h-12 text-gray-400 mb-4" />
+        <Pencil className="w-12 h-12 text-gray-400 mx-auto mb-4" />
         <h3 className="text-xl font-medium mb-2">Page {currentPageNumber}: Ready to Generate</h3>
         <p>Enter your prompt and click 'Generate' to begin!</p>
       </div>
@@ -230,14 +258,14 @@ export default function PagesEditor({
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
             rows={3}
             placeholder={bookPrompt || "Describe the content or image for this page..."}
-            disabled={isGenerating}
+            disabled={isGenerating || isSaving}
           />
         </div>
 
         <button
           onClick={handleGenerate}
-          disabled={isGenerating || (!pagePrompt.trim() && !bookPrompt.trim())}
-          className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-6"
+          disabled={isGenerating || isSaving || (!pagePrompt.trim() && !bookPrompt.trim())}
+          className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-4"
         >
           {isGenerating ? (
             <>
@@ -251,12 +279,50 @@ export default function PagesEditor({
             </>
           )}
         </button>
+        
+        {/* Manual Actions */}
+        <div className="space-y-3 mb-6 pt-4 border-t border-gray-100">
+          <button
+            onClick={handleSave}
+            disabled={isSaving || isGenerating || !hasTextActivity}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {isSaving ? 'Saving...' : 'Save Page Content'}
+          </button>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImageSelect}
+            accept="image/*"
+            className="hidden"
+            disabled={isSaving || isGenerating}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isSaving || isGenerating}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Upload className="w-4 h-4" />
+            Upload Custom Image
+          </button>
+
+          <button
+            onClick={() => onDeletePage(currentPageNumber)}
+            disabled={isSaving || isGenerating || !existingPage}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete Page
+          </button>
+        </div>
 
         {/* Navigation */}
-        <div className="flex justify-between items-center mb-6 pt-4 border-t border-gray-100">
+        <div className="flex justify-between items-center pt-4 border-t border-gray-100 mt-auto">
           <button
             onClick={handlePrevious}
-            disabled={currentPageNumber <= 1 || isGenerating}
+            disabled={currentPageNumber <= 1 || isGenerating || isSaving}
             className="flex items-center gap-1 px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -267,19 +333,12 @@ export default function PagesEditor({
           </div>
           <button
             onClick={handleNext}
-            disabled={currentPageNumber >= totalPages || isGenerating}
+            disabled={currentPageNumber >= totalPages || isGenerating || isSaving}
             className="flex items-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
           >
             Next Page
             <ChevronRight className="w-4 h-4" />
           </button>
-        </div>
-
-        <div className="mt-auto pt-4 border-t border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">Generated Pages History:</h3>
-          <p className="text-xs text-gray-500">
-            History feature coming soon.
-          </p>
         </div>
       </div>
 
