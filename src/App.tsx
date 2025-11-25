@@ -13,24 +13,12 @@ export default function App() {
 
   return (
     <Routes>
-      <Route path="/" element={
-        <Landing
-          onGetStarted={() => navigate('/pricing')}
-          onSignIn={() => navigate('/login')}
-          onSignUp={() => navigate('/signup')}
-        />
-      } />
+      <Route path="/" element={<Landing onGetStarted={() => navigate('/pricing')} onSignIn={() => navigate('/login')} onSignUp={() => navigate('/signup')} />} />
       <Route path="/pricing" element={<Pricing />} />
-      <Route
-        path="/login"
-        element={<Login onLoginSuccess={() => navigate('/dashboard')} onSwitchToSignup={() => navigate('/signup')} />}
-      />
-      <Route
-        path="/signup"
-        element={<Signup onSignupSuccess={() => navigate('/dashboard')} onSwitchToLogin={() => navigate('/login')} />}
-      />
-      <Route path="/editor/:bookId" element={<BookEditor bookId={location?.pathname?.split('/').pop() || ''} onBack={() => navigate('/dashboard')} />} />
-      <Route path="/dashboard" element={<Dashboard onEditBook={() => {}} onViewPricing={() => navigate('/pricing')} onManageBilling={() => {}} />} />
+      <Route path="/login" element={<Login onLoginSuccess={() => navigate('/dashboard')} onSwitchToSignup={() => navigate('/signup')} />} />
+      <Route path="/signup" element={<Signup onSignupSuccess={() => navigate('/dashboard')} onSwitchToLogin={() => navigate('/login')} />} />
+      <Route path="/editor/:bookId" element={<BookEditor bookId={''} onBack={() => navigate('/dashboard')} />} />
+      <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/admin" element={<AdminDashboard />} />
       <Route path="*" element={<div className="p-6 text-center">404</div>} />
     </Routes>
