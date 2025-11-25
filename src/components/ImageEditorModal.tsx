@@ -31,21 +31,22 @@ function centerAspectCrop(
   );
 }
 
-// --- Coloring/Drawing Logic (Simplified) ---
+// --- Drawing Logic ---
 const COLOR_OPTIONS = ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFFFF']; // Black, Red, Green, Blue, White (Eraser)
 
 interface DrawingCanvasProps {
   src: string;
-  onDraw: (blob: Blob) => void;
   isProcessing: boolean;
+  onImageLoad: (loaded: boolean) => void;
+  onCanvasReady: (saveFn: () => Promise<Blob | null>) => void;
 }
 
-function DrawingCanvas({ src, onDraw, isProcessing }: DrawingCanvasProps) {
+function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: DrawingCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState(COLOR_OPTIONS[0]);
   const [brushSize, setBrushSize] = useState(10);
-  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -54,33 +55,55 @@ function DrawingCanvas({ src, onDraw, isProcessing }: DrawingCanvasProps) {
     if (!ctx) return;
 
     const img = new Image();
-    img.crossOrigin = "Anonymous"; // Required for loading external images
+    img.crossOrigin = "Anonymous";
     img.onload = () => {
-      // Set canvas dimensions to match image dimensions
+      // Set internal canvas dimensions to match image dimensions (high resolution)
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
       
-      // Scale the canvas display size for responsiveness
-      canvas.style.width = '100%';
-      canvas.style.height = 'auto';
+      // Set display dimensions for responsiveness
+      setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
 
       // Draw the image onto the canvas
       ctx.drawImage(img, 0, 0);
-      setImageLoaded(true);
+      onImageLoad(true);
+      
+      // Expose the save function to the parent component
+      onCanvasReady(handleSaveDrawing);
+    };
+    img.onerror = () => {
+      console.error("Failed to load image for drawing.");
+      onImageLoad(false);
     };
     img.src = src;
-  }, [src]);
+  }, [src, onImageLoad, onCanvasReady]);
+
+  const handleSaveDrawing = (): Promise<Blob | null> => {
+    const canvas = canvasRef.current;
+    if (!canvas) return Promise.resolve(null);
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        resolve(blob);
+      }, 'image/png');
+    });
+  };
+
+  const getCanvasScale = (canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { scaleX, scaleY, rect };
+  };
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (isProcessing || !imageLoaded) return;
+    if (isProcessing || !imageDimensions.width) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const { scaleX, scaleY, rect } = getCanvasScale(canvas);
 
     ctx.beginPath();
     ctx.moveTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
@@ -88,15 +111,13 @@ function DrawingCanvas({ src, onDraw, isProcessing }: DrawingCanvasProps) {
   };
 
   const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || isProcessing || !imageLoaded) return;
+    if (!isDrawing || isProcessing || !imageDimensions.width) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
+    const { scaleX, scaleY, rect } = getCanvasScale(canvas);
 
     ctx.lineWidth = brushSize;
     ctx.lineCap = 'round';
@@ -110,35 +131,27 @@ function DrawingCanvas({ src, onDraw, isProcessing }: DrawingCanvasProps) {
   };
 
   const stopDrawing = () => {
-    if (isDrawing) {
-      setIsDrawing(false);
-      // Save the current state to the parent component
-      handleSaveDrawing();
-    }
+    setIsDrawing(false);
   };
 
-  const handleSaveDrawing = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    canvas.toBlob((blob) => {
-      if (blob) {
-        onDraw(blob);
-      } else {
-        alert('Failed to save drawing.');
-      }
-    }, 'image/png');
-  };
+  // Calculate aspect ratio for responsive display
+  const aspectRatio = imageDimensions.width / imageDimensions.height;
+  const displayHeight = imageDimensions.width ? `calc(100% / ${aspectRatio})` : 'auto';
 
   return (
-    <div className="flex flex-col items-center space-y-4">
-      <div className="flex gap-4 p-3 bg-gray-100 rounded-lg">
+    <div className="flex flex-col items-center space-y-4 w-full h-full">
+      <div className="flex flex-wrap gap-4 p-3 bg-gray-100 rounded-lg justify-center w-full">
         <div className="flex items-center gap-2">
           <label className="text-sm font-medium text-gray-700">Color:</label>
           {COLOR_OPTIONS.map((c) => (
             <button
               key={c}
-              onClick={() => setColor(c)}
+              onClick={() => {
+                setColor(c);
+                // Reset composite operation when changing color
+                const ctx = canvasRef.current?.getContext('2d');
+                if (ctx) ctx.globalCompositeOperation = c === '#FFFFFF' ? 'destination-out' : 'source-over';
+              }}
               className={`w-8 h-8 rounded-full border-2 transition-all ${
                 color === c ? 'ring-2 ring-offset-2 ring-blue-500' : 'hover:ring-1 ring-gray-300'
               }`}
@@ -161,20 +174,22 @@ function DrawingCanvas({ src, onDraw, isProcessing }: DrawingCanvasProps) {
         </div>
       </div>
       
-      <div className="max-w-full max-h-[60vh] overflow-auto border border-gray-300 shadow-md">
-        {!imageLoaded && (
+      <div className="flex-1 w-full flex items-center justify-center overflow-auto">
+        {!imageDimensions.width ? (
           <div className="w-96 h-96 flex items-center justify-center bg-gray-200">
             <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
           </div>
+        ) : (
+          <canvas
+            ref={canvasRef}
+            onMouseDown={startDrawing}
+            onMouseMove={draw}
+            onMouseUp={stopDrawing}
+            onMouseLeave={stopDrawing}
+            className="cursor-crosshair max-w-full max-h-full"
+            style={{ width: 'auto', height: displayHeight, maxWidth: '100%', maxHeight: '70vh' }}
+          />
         )}
-        <canvas
-          ref={canvasRef}
-          onMouseDown={startDrawing}
-          onMouseMove={draw}
-          onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
-          className={`cursor-crosshair ${!imageLoaded ? 'hidden' : ''}`}
-        />
       </div>
     </div>
   );
@@ -186,6 +201,8 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
   const [crop, setCrop] = useState<Crop>();
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [completedCrop, setCompletedCrop] = useState<Crop>();
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [drawingSaveFn, setDrawingSaveFn] = useState<(() => Promise<Blob | null>) | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
   if (!isOpen) return null;
@@ -195,7 +212,8 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { width, height } = e.currentTarget;
     setImage(e.currentTarget);
-    setCrop(centerAspectCrop(width, height, 1)); // Default to 1:1 aspect ratio for simplicity
+    setCrop(centerAspectCrop(width, height, 1)); // Default to 1:1 aspect ratio for coloring pages
+    setImageLoaded(true);
   };
 
   const getCroppedImage = (image: HTMLImageElement, crop: Crop): Promise<Blob> => {
@@ -234,7 +252,7 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
     });
   };
 
-  const handleCrop = async () => {
+  const handleSaveCrop = async () => {
     if (image && completedCrop) {
       try {
         const blob = await getCroppedImage(image, completedCrop);
@@ -245,42 +263,22 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
       }
     }
   };
-
-  // --- Drawing Logic ---
-
-  const handleDrawingComplete = async (blob: Blob) => {
-    // This function is called every time the user stops drawing (mouse up/leave)
-    // We don't want to save/upload on every stroke, only when the user clicks 'Save'
-    // For now, we will rely on the final save button.
-    // To simplify, we will just pass the blob to the final save handler.
-    // NOTE: Since the DrawingCanvas handles its own state, we need a way to get the final blob on save.
-    // Let's adjust the DrawingCanvas to only call onDraw when the user explicitly saves.
-    // For now, we will rely on the user clicking the main Save button after drawing.
-    // Since the DrawingCanvas updates the canvas in place, we need to capture the final state.
-    
-    // For simplicity in this iteration, we will rely on the user clicking the main Save button.
-    // The DrawingCanvas component is currently self-contained and saves its state to the canvas.
-    // We need a way to trigger the final save from the main modal.
-    
-    // Since the DrawingCanvas is complex to integrate statefully here, let's simplify the modal structure.
-    // We will make the DrawingCanvas responsible for calling onEditComplete directly when the user finishes drawing and clicks save.
-    
-    // Reverting the DrawingCanvas to be a simple component that handles drawing and calls onDraw (which is the final save handler)
-    await onEditComplete(blob);
-  };
   
-  const handleSave = () => {
-    if (activeTab === 'crop') {
-      handleCrop();
-    } else if (activeTab === 'color') {
-      // The DrawingCanvas component needs to expose a save function or rely on the onDraw callback.
-      // Since the current DrawingCanvas calls onDraw on mouse up, we rely on that for now, 
-      // but we need to ensure the main save button is disabled/hidden if the drawing component handles saving internally.
-      // Given the current structure, let's assume the DrawingCanvas handles the save via onDraw/onEditComplete.
-      alert('Please use the drawing tools. The drawing is saved automatically after each stroke.');
-      onClose();
+  const handleSaveDrawing = async () => {
+    if (drawingSaveFn) {
+      try {
+        const blob = await drawingSaveFn();
+        if (blob) {
+          await onEditComplete(blob);
+        } else {
+          alert('Failed to capture drawing.');
+        }
+      } catch (error) {
+        console.error('Error during drawing save:', error);
+        alert('Failed to save drawing.');
+      }
     }
-  }
+  };
 
 
   return (
@@ -299,7 +297,10 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
         <div className="flex-shrink-0 border-b border-gray-200 px-4 pt-2">
           <div className="flex gap-4">
             <button
-              onClick={() => setActiveTab('crop')}
+              onClick={() => {
+                setActiveTab('crop');
+                setImageLoaded(false); // Reset image loaded state for crop tab
+              }}
               className={`flex items-center gap-2 px-4 py-2 rounded-t-lg font-medium transition-colors ${
                 activeTab === 'crop'
                   ? 'bg-gray-100 text-blue-600 border-b-2 border-blue-600'
@@ -310,7 +311,10 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
               Crop
             </button>
             <button
-              onClick={() => setActiveTab('color')}
+              onClick={() => {
+                setActiveTab('color');
+                setImageLoaded(false); // Reset image loaded state for drawing tab
+              }}
               className={`flex items-center gap-2 px-4 py-2 rounded-t-lg font-medium transition-colors ${
                 activeTab === 'color'
                   ? 'bg-gray-100 text-blue-600 border-b-2 border-blue-600'
@@ -323,9 +327,14 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-100">
+        <div className="flex-1 overflow-hidden p-4 flex items-center justify-center bg-gray-100">
           {activeTab === 'crop' ? (
-            <div className="max-w-full max-h-full">
+            <div className="max-w-full max-h-full flex items-center justify-center">
+              {!imageLoaded && (
+                <div className="w-96 h-96 flex items-center justify-center bg-gray-200">
+                  <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
+                </div>
+              )}
               <ReactCrop
                 crop={crop}
                 onChange={c => setCrop(c)}
@@ -337,15 +346,16 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
                   alt="Crop me"
                   src={src}
                   onLoad={onImageLoad}
-                  style={{ maxHeight: '70vh', maxWidth: '100%' }}
+                  style={{ maxHeight: '70vh', maxWidth: '100%', display: imageLoaded ? 'block' : 'none' }}
                 />
               </ReactCrop>
             </div>
           ) : (
             <DrawingCanvas 
               src={src} 
-              onDraw={handleDrawingComplete} 
               isProcessing={isProcessing} 
+              onImageLoad={setImageLoaded}
+              onCanvasReady={setDrawingSaveFn}
             />
           )}
         </div>
@@ -359,8 +369,8 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
           </button>
           {activeTab === 'crop' && (
             <button
-              onClick={handleSave}
-              disabled={!completedCrop || isProcessing}
+              onClick={handleSaveCrop}
+              disabled={!completedCrop || isProcessing || !imageLoaded}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isProcessing ? (
@@ -378,12 +388,21 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
           )}
           {activeTab === 'color' && (
             <button
-              onClick={onClose} // Drawing is saved on mouse up, so closing the modal is the final action
-              disabled={isProcessing}
+              onClick={handleSaveDrawing}
+              disabled={isProcessing || !imageLoaded}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Save className="w-4 h-4" />
-              Done Coloring (Auto-Saved)
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Done Coloring & Save
+                </>
+              )}
             </button>
           )}
         </div>
