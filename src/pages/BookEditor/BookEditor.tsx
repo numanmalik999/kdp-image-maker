@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Page, PageActivityType } from '../../types';
+import { Page, PageActivityType, BookSettings } from '../../types';
 import { generateColoringImage, generatePageContent } from '../../utils/aiGeneration';
 import { supabase, Book } from '../../lib/supabase';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import SinglePageEditor from '../../components/SinglePageEditor';
 import ExportModal from '../../components/ExportModal';
+import BookSettingsModal from '../../components/BookSettingsModal';
+import ImageCropModal from '../../components/ImageCropModal';
 import { generatePDF } from '../../utils/pdfGenerator';
 import { checkAICredits, decrementAICredits, incrementImageCount, checkPageCreationLimit, incrementPageCount } from '../../utils/subscriptionLimits';
 
@@ -27,6 +29,9 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
 
@@ -314,6 +319,57 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     }
   };
 
+  const handleCropImage = (imageUrl: string) => {
+    setImageToCrop(imageUrl);
+    setShowCropModal(true);
+  };
+
+  const handleCropComplete = async (croppedImageBlob: Blob) => {
+    if (!book) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      // Upload the cropped blob back to storage
+      const fileName = `${bookId}/${viewMode}-${currentPage}-cropped-${Date.now()}.png`;
+
+      const { data, error } = await supabase.storage
+        .from('book-images')
+        .upload(fileName, croppedImageBlob, {
+          cacheControl: '3600',
+          upsert: false,
+        });
+
+      if (error) throw error;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('book-images')
+        .getPublicUrl(data.path);
+
+      const newImageUrl = publicUrlData.publicUrl;
+
+      // Update the current page/cover with the new cropped image URL
+      if (viewMode === 'front-cover') {
+        setFrontCover(prev => prev ? { ...prev, imageUrl: newImageUrl } : null);
+      } else if (viewMode === 'back-cover') {
+        setBackCover(prev => prev ? { ...prev, imageUrl: newImageUrl } : null);
+      } else {
+        updatePageData(currentPage, { imageUrl: newImageUrl });
+      }
+
+      setToastMessage('Image cropped and updated successfully!');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+    } catch (error) {
+      console.error('Error cropping and uploading image:', error);
+      alert('Failed to crop and save image.');
+    } finally {
+      setImageToCrop(null);
+      setShowCropModal(false);
+    }
+  };
+
   const updateBookCoverStatus = async (type: 'front' | 'back', status: boolean) => {
     try {
       const field = type === 'front' ? 'has_front_cover' : 'has_back_cover';
@@ -427,10 +483,18 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
   };
 
   const handleUpdateContent = (content: string, activityType: PageActivityType) => {
-    if (viewMode === 'front-cover' && frontCover) {
-      setFrontCover({ ...frontCover, content, activityType });
-    } else if (viewMode === 'back-cover' && backCover) {
-      setBackCover({ ...backCover, content, activityType });
+    if (viewMode === 'front-cover') {
+      setFrontCover(prev => ({
+        ...(prev || { id: 'front-cover', pageNumber: 0, content: '', activityType: 'image' }),
+        content,
+        activityType: 'image', // Covers are always image type
+      }));
+    } else if (viewMode === 'back-cover') {
+      setBackCover(prev => ({
+        ...(prev || { id: 'back-cover', pageNumber: -1, content: '', activityType: 'image' }),
+        content,
+        activityType: 'image', // Covers are always image type
+      }));
     } else {
       const updatedPages = [...pages];
       const pageIndex = updatedPages.findIndex(p => p.pageNumber === currentPage);
@@ -450,6 +514,14 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
 
   const handleSwitchToBackCover = () => {
     setViewMode('back-cover');
+  };
+
+  const handleSwitchToPages = () => {
+    setViewMode('page');
+    // Ensure we land on a valid page number if the current one was a cover
+    if (currentPage === 0 || currentPage === -1) {
+      setCurrentPage(1);
+    }
   };
 
   const handleAddNewPage = async () => {
@@ -584,6 +656,44 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     );
   };
 
+  const handleSaveSettings = async (newSettings: BookSettings) => {
+    if (!book) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('books')
+        .update({
+          title: newSettings.title,
+          author: newSettings.author,
+          trim_size: newSettings.trimSize,
+          font_size: newSettings.fontSize,
+          target_pages: newSettings.targetPages,
+        })
+        .eq('id', bookId);
+
+      if (error) throw error;
+
+      setBook(prev => prev ? {
+        ...prev,
+        title: newSettings.title,
+        author: newSettings.author,
+        trim_size: newSettings.trimSize,
+        font_size: newSettings.fontSize,
+        target_pages: newSettings.targetPages,
+      } : null);
+
+      setToastMessage('Book settings updated successfully!');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 2000);
+      setShowSettingsModal(false);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      alert('Failed to save book settings.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const getCurrentPageData = () => {
     if (viewMode === 'front-cover') {
       return {
@@ -638,6 +748,14 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
 
   const { content, imageUrl, activityType, isFrontCover, isBackCover } = getCurrentPageData();
 
+  const currentSettings: BookSettings = {
+    title: book.title,
+    author: book.author || '',
+    trimSize: book.trim_size,
+    fontSize: book.font_size,
+    targetPages: book.target_pages,
+  };
+
   return (
     <div className="h-screen flex flex-col overflow-hidden">
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
@@ -667,20 +785,23 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
           isFrontCover={isFrontCover}
           isBackCover={isBackCover}
           
-          // Updated props
+          // Handlers
           onGenerateText={handleGeneratePageText}
           onGenerateImage={handleGeneratePageImage}
           onGenerateCoverImage={handleGenerateCoverImage}
-          onUploadImage={handleUploadImage} // Pass new handler
+          onUploadImage={handleUploadImage}
+          onEditImage={handleCropImage}
+          onOpenSettings={() => setShowSettingsModal(true)}
 
           onNextPage={handleNextPage}
           onPreviousPage={handlePreviousPage}
           onSaveBook={saveBook}
           onUpdateContent={handleUpdateContent}
           onSwitchToFrontCover={handleSwitchToFrontCover}
+          onSwitchToBackCover={handleSwitchToBackCover}
+          onSwitchToPages={handleSwitchToPages}
           onAddNewPage={handleAddNewPage}
           onInsertPageAfter={handleInsertPageAfter}
-          onSwitchToBackCover={handleSwitchToBackCover}
           onCompleteBook={handleCompleteBook}
           isSaving={saving}
         />
@@ -694,6 +815,27 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         onExportKindle={handleExportKindle}
         isExporting={isExporting}
       />
+
+      <BookSettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        settings={currentSettings}
+        onSave={handleSaveSettings}
+        isSaving={saving}
+      />
+
+      {imageToCrop && (
+        <ImageCropModal
+          isOpen={showCropModal}
+          onClose={() => {
+            setShowCropModal(false);
+            setImageToCrop(null);
+          }}
+          src={imageToCrop}
+          onCropComplete={handleCropComplete}
+          isProcessing={saving}
+        />
+      )}
 
       {showToast && (
         <div className="fixed bottom-6 right-6 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-fade-in z-50">

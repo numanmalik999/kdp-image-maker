@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, ChevronLeft, ChevronRight, Edit2, Plus, PlusCircle, CheckCircle, FileText, Image as ImageIcon, Upload } from 'lucide-react';
+import { Loader2, ChevronLeft, ChevronRight, Edit2, Plus, PlusCircle, CheckCircle, FileText, Image as ImageIcon, Upload, Settings, ArrowLeft } from 'lucide-react';
 import { PageActivityType } from '../types';
 
 interface SinglePageEditorProps {
@@ -26,9 +26,12 @@ interface SinglePageEditorProps {
   onUpdateContent: (content: string, activityType: PageActivityType) => void; // Updated handler
   onSwitchToFrontCover: () => void;
   onSwitchToBackCover: () => void;
+  onSwitchToPages: () => void; // New handler
   onAddNewPage: () => void;
   onInsertPageAfter: () => void;
   onCompleteBook: () => void;
+  onOpenSettings: () => void; // New handler
+  onEditImage: (imageUrl: string) => void; // New handler
   isSaving: boolean;
 }
 
@@ -61,9 +64,12 @@ export default function SinglePageEditor({
   onUpdateContent,
   onSwitchToFrontCover,
   onSwitchToBackCover,
+  onSwitchToPages, // Destructure new prop
   onAddNewPage,
   onInsertPageAfter,
   onCompleteBook,
+  onOpenSettings, // Destructure new prop
+  onEditImage, // Destructure new prop
   isSaving,
 }: SinglePageEditorProps) {
   const [prompt, setPrompt] = useState('');
@@ -179,14 +185,32 @@ export default function SinglePageEditor({
     <div className="h-full flex">
       <div className="w-96 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
         <div className="p-6 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-2xl font-bold text-gray-900">
-            {getPageTitle()}
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-900">
+              {getPageTitle()}
+            </h2>
+            <button
+              onClick={onOpenSettings}
+              className="p-2 text-gray-500 hover:text-blue-600 transition-colors rounded-lg"
+              title="Edit Book Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {/* Cover Navigation */}
           <div className="space-y-2">
+            {isCoverView && (
+              <button
+                onClick={onSwitchToPages}
+                className="w-full px-3 py-2 border-2 border-blue-600 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Back to Pages
+              </button>
+            )}
             <button
               onClick={onSwitchToFrontCover}
               className={`w-full px-3 py-2 border-2 rounded-lg transition-colors text-sm font-medium ${
@@ -325,6 +349,16 @@ export default function SinglePageEditor({
               )}
             </label>
           </div>
+
+          {pageImage && (
+            <button
+              onClick={() => onEditImage(pageImage)}
+              className="w-full px-4 py-2 border-2 border-purple-600 text-purple-600 rounded-lg hover:bg-purple-50 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+            >
+              <CropIcon className="w-4 h-4" />
+              Crop / Edit Image
+            </button>
+          )}
 
           {/* Page Navigation (Only for regular pages) */}
           {!isCoverView && (
