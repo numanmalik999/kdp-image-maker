@@ -87,7 +87,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
             pageNumber: p.page_number,
             content: p.content || '',
             imageUrl: p.image_url || undefined,
-            activityType: (p as any).activity_type || 'coloring', // Load activity type
+            activityTypes: (p as any).activity_type ? [(p as any).activity_type] : ['coloring'], // Convert single string to array for backward compatibility
           };
 
           if (p.is_front_cover) {
@@ -112,7 +112,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     const updatedPages = [...pages];
     const pageIndex = updatedPages.findIndex(p => p.pageNumber === pageNumber);
 
-    const defaultActivityType: PageActivityType = 'coloring';
+    const defaultActivityTypes: PageActivityType[] = ['coloring'];
 
     if (pageIndex >= 0) {
       updatedPages[pageIndex] = { ...updatedPages[pageIndex], ...updates };
@@ -123,7 +123,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         pageNumber,
         content: updates.content || '',
         imageUrl: updates.imageUrl,
-        activityType: updates.activityType || defaultActivityType,
+        activityTypes: updates.activityTypes || defaultActivityTypes,
       });
     }
 
@@ -131,7 +131,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     setPages(updatedPages);
   };
 
-  const handleGeneratePageText = async (pageNumber: number, prompt: string, activityType: PageActivityType) => {
+  const handleGeneratePageText = async (pageNumber: number, prompt: string, activityTypes: PageActivityType[]) => {
     if (!sessionToken || !book) {
       alert('Authentication required for AI generation.');
       return;
@@ -161,13 +161,13 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         book.font_size,
         sessionToken,
         book.book_prompt || undefined,
-        activityType // Pass activity type to AI function
+        activityTypes // Pass array of activity types
       );
       
       await decrementAICredits(user.id);
       await incrementPageCount(user.id);
 
-      updatePageData(pageNumber, { content, activityType });
+      updatePageData(pageNumber, { content, activityTypes });
 
       setToastMessage(`Page ${pageNumber} text generated successfully!`);
       setShowToast(true);
@@ -180,7 +180,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     }
   };
 
-  const handleGeneratePageImage = async (pageNumber: number, prompt: string, activityType: PageActivityType) => {
+  const handleGeneratePageImage = async (pageNumber: number, prompt: string, activityTypes: PageActivityType[]) => {
     if (!sessionToken || !book) {
       alert('Authentication required for AI generation.');
       return;
@@ -197,12 +197,12 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       }
 
       // Generate Image (DALL-E 3)
-      const imageUrl = await generateColoringImage(prompt, 'DALL-E 3', bookId, sessionToken, activityType);
+      const imageUrl = await generateColoringImage(prompt, 'DALL-E 3', bookId, sessionToken, activityTypes);
       
       await decrementAICredits(user.id);
       await incrementImageCount(user.id);
 
-      updatePageData(pageNumber, { imageUrl, activityType });
+      updatePageData(pageNumber, { imageUrl, activityTypes });
 
       setToastMessage(`Page ${pageNumber} image generated successfully!`);
       setShowToast(true);
@@ -232,7 +232,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       }
 
       // Covers only generate images
-      const imageUrl = await generateColoringImage(prompt, 'DALL-E 3', bookId, sessionToken, 'image'); // Covers are always 'image' type
+      const imageUrl = await generateColoringImage(prompt, 'DALL-E 3', bookId, sessionToken, ['image']); // Covers are always 'image' type
 
       await decrementAICredits(user.id);
       await incrementImageCount(user.id);
@@ -242,7 +242,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
         pageNumber: type === 'front' ? 0 : -1,
         content: prompt,
         imageUrl,
-        activityType: 'image',
+        activityTypes: ['image'],
       };
 
       if (type === 'front') {
@@ -308,20 +308,20 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
 
       if (viewMode === 'front-cover') {
         setFrontCover(prev => ({
-          ...(prev || { id: 'front-cover', pageNumber: 0, content: '', activityType: 'image' }),
+          ...(prev || { id: 'front-cover', pageNumber: 0, content: '', activityTypes: ['image'] }),
           imageUrl,
-          activityType: 'image',
+          activityTypes: ['image'],
         }));
         await updateBookCoverStatus('front', true);
       } else if (viewMode === 'back-cover') {
         setBackCover(prev => ({
-          ...(prev || { id: 'back-cover', pageNumber: -1, content: '', activityType: 'image' }),
+          ...(prev || { id: 'back-cover', pageNumber: -1, content: '', activityTypes: ['image'] }),
           imageUrl,
-          activityType: 'image',
+          activityTypes: ['image'],
         }));
         await updateBookCoverStatus('back', true);
       } else {
-        updatePageData(currentPage, { imageUrl, activityType: 'image' });
+        updatePageData(currentPage, { imageUrl, activityTypes: ['image'] });
       }
 
       setToastMessage('Image uploaded successfully!');
@@ -428,6 +428,13 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       // Insert/Update regular pages
       for (const page of pages) {
         if (page.content || page.imageUrl) {
+          // NOTE: Supabase schema currently expects activity_type as TEXT, not TEXT[]. 
+          // We must convert the array back to a single string or JSON string for storage.
+          // For simplicity and compatibility with existing schema, let's store the primary activity type or a joined string.
+          // Since we only use the activity type for AI generation and PDF rendering, storing the array as a JSON string is safer.
+          // However, since the schema is TEXT, let's join them with a delimiter.
+          const activityTypeString = (page.activityTypes || ['coloring']).join(',');
+
           const { error: pageError } = await supabase
             .from('book_pages')
             .insert({
@@ -437,7 +444,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
               image_url: page.imageUrl || null,
               is_front_cover: false,
               is_back_cover: false,
-              activity_type: page.activityType || 'coloring', // Save activity type
+              activity_type: activityTypeString, // Save joined string
             });
 
           if (pageError) throw pageError;
@@ -455,7 +462,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
             image_url: frontCover.imageUrl || null,
             is_front_cover: true,
             is_back_cover: false,
-            activity_type: frontCover.activityType || 'image',
+            activity_type: (frontCover.activityTypes || ['image']).join(','),
           }, {
             onConflict: 'book_id,page_number'
           });
@@ -474,7 +481,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
             image_url: backCover.imageUrl || null,
             is_front_cover: false,
             is_back_cover: true,
-            activity_type: backCover.activityType || 'image',
+            activity_type: (backCover.activityTypes || ['image']).join(','),
           }, {
             onConflict: 'book_id,page_number'
           });
@@ -507,28 +514,28 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     }
   };
 
-  const handleUpdateContent = (content: string, activityType: PageActivityType) => {
+  const handleUpdateContent = (content: string, activityTypes: PageActivityType[]) => {
     if (viewMode === 'front-cover') {
       setFrontCover(prev => ({
-        ...(prev || { id: 'front-cover', pageNumber: 0, content: '', activityType: 'image' }),
+        ...(prev || { id: 'front-cover', pageNumber: 0, content: '', activityTypes: ['image'] }),
         content,
-        activityType: 'image', // Covers are always image type
+        activityTypes: ['image'], // Covers are always image type
       }));
     } else if (viewMode === 'back-cover') {
       setBackCover(prev => ({
-        ...(prev || { id: 'back-cover', pageNumber: -1, content: '', activityType: 'image' }),
+        ...(prev || { id: 'back-cover', pageNumber: -1, content: '', activityTypes: ['image'] }),
         content,
-        activityType: 'image', // Covers are always image type
+        activityTypes: ['image'], // Covers are always image type
       }));
     } else {
       const updatedPages = [...pages];
       const pageIndex = updatedPages.findIndex(p => p.pageNumber === currentPage);
       if (pageIndex >= 0) {
-        updatedPages[pageIndex] = { ...updatedPages[pageIndex], content, activityType };
+        updatedPages[pageIndex] = { ...updatedPages[pageIndex], content, activityTypes };
         setPages(updatedPages);
       } else {
         // If page doesn't exist, create it with content
-        updatePageData(currentPage, { content, activityType });
+        updatePageData(currentPage, { content, activityTypes });
       }
     }
   };
@@ -536,7 +543,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
   const handleSwitchToFrontCover = () => {
     // Initialize frontCover if null
     if (!frontCover) {
-      setFrontCover({ id: 'front-cover', pageNumber: 0, content: '', activityType: 'image' });
+      setFrontCover({ id: 'front-cover', pageNumber: 0, content: '', activityTypes: ['image'] });
     }
     setViewMode('front-cover');
   };
@@ -544,7 +551,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
   const handleSwitchToBackCover = () => {
     // Initialize backCover if null
     if (!backCover) {
-      setBackCover({ id: 'back-cover', pageNumber: -1, content: '', activityType: 'image' });
+      setBackCover({ id: 'back-cover', pageNumber: -1, content: '', activityTypes: ['image'] });
     }
     setViewMode('back-cover');
   };
@@ -732,7 +739,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       return {
         content: frontCover?.content || '',
         imageUrl: frontCover?.imageUrl,
-        activityType: frontCover?.activityType || 'image',
+        activityTypes: frontCover?.activityTypes || ['image'],
         isFrontCover: true,
         isBackCover: false,
       };
@@ -742,7 +749,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       return {
         content: backCover?.content || '',
         imageUrl: backCover?.imageUrl,
-        activityType: backCover?.activityType || 'image',
+        activityTypes: backCover?.activityTypes || ['image'],
         isFrontCover: false,
         isBackCover: true,
       };
@@ -752,7 +759,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     return {
       content: page?.content || '',
       imageUrl: page?.imageUrl,
-      activityType: page?.activityType || 'coloring',
+      activityTypes: page?.activityTypes || ['coloring'],
       isFrontCover: false,
       isBackCover: false,
     };
@@ -779,7 +786,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     );
   }
 
-  const { content, imageUrl, activityType, isFrontCover, isBackCover } = getCurrentPageData();
+  const { content, imageUrl, activityTypes, isFrontCover, isBackCover } = getCurrentPageData();
 
   const currentSettings: BookSettings = {
     title: book.title,
@@ -811,7 +818,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
           totalPages={book.target_pages}
           pageContent={content}
           pageImage={imageUrl}
-          pageActivityType={activityType}
+          pageActivityType={activityTypes}
           bookPrompt={book.book_prompt || ''}
           hasFrontCover={book.has_front_cover}
           hasBackCover={book.has_back_cover}

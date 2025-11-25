@@ -1,5 +1,6 @@
 /// <reference types="https://deno.land/std@0.190.0/http/server.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+// @ts-ignore: Cannot find module 'https://esm.sh/@supabase/supabase-js@2.57.4'
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
@@ -11,9 +12,10 @@ const corsHeaders = {
 interface RequestBody {
   prompt: string;
   bookId?: string;
-  activityType?: string;
+  activityTypes?: string[]; // Updated to array
 }
 
+// @ts-ignore: Deno.serve is available in the runtime environment
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -23,7 +25,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { prompt, bookId }: RequestBody = await req.json(); 
+    const { prompt, bookId, activityTypes }: RequestBody = await req.json(); 
 
     if (!prompt) {
       return new Response(
@@ -38,6 +40,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // @ts-ignore: Deno.env is available in the runtime environment
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openaiApiKey) {
       return new Response(
@@ -46,10 +49,19 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // CRITICAL: Prioritize user prompt while enforcing coloring book style
-    const coloringStyle = "Simple, clean black and white line art illustration suitable for coloring books. Use clear, bold outlines with no shading or colors, just black lines on a white background.";
+    let styleModifier = "Simple, clean black and white line art illustration suitable for coloring books. Use clear, bold outlines with no shading or colors, just black lines on a white background.";
     
-    const enhancedPrompt = `${coloringStyle} Subject: ${prompt}.`;
+    if (activityTypes?.includes('maze')) {
+      styleModifier = "A complex, solvable maze illustration in black and white line art. The maze should be clearly defined and suitable for printing. Subject: ";
+    } else if (activityTypes?.includes('dot-to-dot')) {
+      styleModifier = "A simple black and white dot-to-dot puzzle illustration, clearly numbered, suitable for children. Subject: ";
+    } else if (activityTypes?.includes('image')) {
+      styleModifier = "A high-contrast black and white illustration suitable for a full-page image or cover. Style: ";
+    } else if (activityTypes?.includes('coloring')) {
+      styleModifier = "Simple, clean black and white line art illustration suitable for coloring books. Use clear, bold outlines with no shading or colors, just black lines on a white background. Subject: ";
+    }
+
+    const enhancedPrompt = `${styleModifier} Subject: ${prompt}.`;
 
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
@@ -79,8 +91,11 @@ Deno.serve(async (req: Request) => {
     const imageUrl = data.data[0].url;
 
     if (bookId) {
+      // @ts-ignore: Deno.env is available in the runtime environment
       const supabase = createClient(
+        // @ts-ignore
         Deno.env.get("SUPABASE_URL")!,
+        // @ts-ignore
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
       );
 

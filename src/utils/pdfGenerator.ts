@@ -112,7 +112,7 @@ export async function generateKDPPDF(options: PDFGeneratorOptions): Promise<void
   if (usePages && pages && pages.length > 0) {
     for (const [index, page] of pages.entries()) {
       // Determine if this is a coloring/tracing page
-      const isColoringPage = page.activityType === 'coloring';
+      const isColoringPage = page.activityTypes?.includes('coloring');
       
       // Reset Y position for a new page if needed
       if (index > 0) {
@@ -314,12 +314,15 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
     if (!isFirstPage) doc.addPage();
     isFirstPage = false;
 
-    const isTracingPage = page.activityType === 'coloring';
+    const isTracingPage = page.activityTypes?.includes('tracing');
+    const hasImageActivity = page.activityTypes?.some(t => ['coloring', 'maze', 'dot-to-dot', 'image'].includes(t));
+    
     let textStartY = margin;
 
-    if (page.imageUrl) {
-      // Reserve space for text if it's a tracing page
-      textStartY = await addImageToPage(page.imageUrl, isTracingPage);
+    if (page.imageUrl && hasImageActivity) {
+      // Reserve space for text if it's a tracing page or story page
+      const reserveSpace = isTracingPage || page.activityTypes?.includes('story');
+      textStartY = await addImageToPage(page.imageUrl, reserveSpace);
     }
 
     if (page.content) {

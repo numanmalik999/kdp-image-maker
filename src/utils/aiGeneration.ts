@@ -56,7 +56,7 @@ export async function generatePageContent(
   fontSize: number,
   token: string,
   bookContext?: string,
-  activityType?: PageActivityType // Added activityType
+  activityTypes?: PageActivityType[] // Updated to array
 ): Promise<string> {
   const apiUrl = `${SUPABASE_URL}/functions/v1/generate-page-content`;
 
@@ -72,7 +72,7 @@ export async function generatePageContent(
       totalPages,
       fontSize,
       bookContext,
-      activityType, // Passed activityType to Edge Function
+      activityTypes, // Passed array of activity types to Edge Function
     }),
   });
 
@@ -90,7 +90,7 @@ export async function generateColoringImage(
   model: string = 'DALL-E 3', 
   bookId?: string, 
   token?: string,
-  activityType?: PageActivityType // Added activityType
+  activityTypes?: PageActivityType[] // Updated to array
 ): Promise<string> {
   let functionName = 'generate-coloring-image';
 
@@ -110,7 +110,7 @@ export async function generateColoringImage(
     body: JSON.stringify({
       prompt,
       bookId,
-      activityType, // Passed activityType to Edge Function
+      activityTypes, // Passed array of activity types to Edge Function
     }),
   });
 

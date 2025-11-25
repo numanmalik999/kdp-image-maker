@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+/// <reference types="https://deno.land/std@0.190.0/http/server.d.ts" />
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const corsHeaders = {
@@ -13,10 +13,11 @@ interface RequestBody {
   totalPages: number;
   fontSize: number;
   bookContext?: string;
-  activityType?: string;
+  activityTypes?: string[]; // Updated to array
 }
 
-serve(async (req: Request) => {
+// @ts-ignore: Deno.serve is available in the runtime environment
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 200,
@@ -25,7 +26,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { prompt, pageNumber, totalPages, fontSize, bookContext, activityType }: RequestBody = await req.json();
+    const { prompt, pageNumber, totalPages, fontSize, bookContext, activityTypes }: RequestBody = await req.json();
 
     if (!prompt || !pageNumber) {
       return new Response(
@@ -40,6 +41,7 @@ serve(async (req: Request) => {
       );
     }
 
+    // @ts-ignore: Deno.env is available in the runtime environment
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
 
     if (!openaiApiKey) {
@@ -59,11 +61,13 @@ serve(async (req: Request) => {
 
     let systemPrompt: string;
     let userContent: string;
+    
+    const isTracing = activityTypes?.includes('tracing');
+    const isStory = activityTypes?.includes('story');
 
-    if (activityType === 'coloring') {
-      // If activity is coloring/tracing, generate simple, repetitive text based on the prompt for tracing practice.
-      // We ignore word count limits here as tracing text is short and large.
-      systemPrompt = `You are a content generator for children's coloring and tracing books. Your task is to generate simple, repetitive text suitable for tracing practice based on the user's prompt.
+    if (isTracing && !isStory) {
+      // If only tracing is selected, generate simple, repetitive text for tracing practice.
+      systemPrompt = `You are a content generator for children's tracing books. Your task is to generate simple, repetitive text suitable for tracing practice based on the user's prompt.
 
 CRITICAL REQUIREMENTS:
 1. The output must be short, simple, and repetitive (e.g., repeating a word or short phrase 5-10 times).
@@ -73,8 +77,8 @@ CRITICAL REQUIREMENTS:
       
       userContent = `Generate tracing text based on this phrase: "${prompt}"`;
 
-    } else {
-      // Default behavior for story/text pages
+    } else if (isStory || isTracing) {
+      // Default behavior for story/text pages (or if both story and tracing are selected, prioritize story generation)
       const wordsPerPage = fontSize === 10 ? 300 : fontSize === 11 ? 275 : 250;
 
       systemPrompt = `You are a professional book writer. Generate content for a single page of a book.
@@ -93,6 +97,17 @@ ${bookContext ? `BOOK CONTEXT: ${bookContext}` : ''}
 Return ONLY the page content as plain text, no JSON or formatting.`;
 
       userContent = `Generate page ${pageNumber} content based on: ${prompt}`;
+    } else {
+      // If no content activity is selected, return empty content
+      return new Response(
+        JSON.stringify({ content: "" }),
+        {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
     }
 
     const response = await fetch("https://api.openai.com/v1/chat/completions", {

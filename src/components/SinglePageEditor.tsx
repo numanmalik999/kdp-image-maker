@@ -7,7 +7,7 @@ interface SinglePageEditorProps {
   totalPages: number;
   pageContent: string;
   pageImage?: string;
-  pageActivityType?: PageActivityType; // New prop
+  pageActivityType?: PageActivityType[]; // Updated prop to array
   bookPrompt: string;
   hasFrontCover: boolean;
   hasBackCover: boolean;
@@ -15,32 +15,33 @@ interface SinglePageEditorProps {
   isBackCover?: boolean;
   
   // Updated props: separate handlers for text and image
-  onGenerateText: (pageNumber: number, prompt: string, activityType: PageActivityType) => Promise<void>;
-  onGenerateImage: (pageNumber: number, prompt: string, activityType: PageActivityType) => Promise<void>;
+  onGenerateText: (pageNumber: number, prompt: string, activityTypes: PageActivityType[]) => Promise<void>;
+  onGenerateImage: (pageNumber: number, prompt: string, activityTypes: PageActivityType[]) => Promise<void>;
   onGenerateCoverImage: (type: 'front' | 'back', prompt: string) => Promise<void>;
-  onUploadImage: (file: File) => Promise<void>; // New handler for image upload
+  onUploadImage: (file: File) => Promise<void>;
   
   onNextPage: () => void;
   onPreviousPage: () => void;
   onSaveBook: () => void;
-  onUpdateContent: (content: string, activityType: PageActivityType) => void; // Updated handler
+  onUpdateContent: (content: string, activityTypes: PageActivityType[]) => void; // Updated handler
   onSwitchToFrontCover: () => void;
   onSwitchToBackCover: () => void;
-  onSwitchToPages: () => void; // New handler
+  onSwitchToPages: () => void;
   onAddNewPage: () => void;
   onInsertPageAfter: () => void;
   onCompleteBook: () => void;
-  onOpenSettings: () => void; // New handler
-  onEditImage: (imageUrl: string) => void; // New handler
+  onOpenSettings: () => void;
+  onEditImage: (imageUrl: string) => void;
   isSaving: boolean;
 }
 
-const ACTIVITY_OPTIONS: { value: PageActivityType; label: string }[] = [
-  { value: 'coloring', label: 'Coloring/Tracing' },
-  { value: 'story', label: 'Story/Text Page' },
-  { value: 'maze', label: 'Maze' },
-  { value: 'dot-to-dot', label: 'Dot-to-Dot Game' },
-  { value: 'image', label: 'Full Page Image' },
+const ACTIVITY_OPTIONS: { value: PageActivityType; label: string; group: 'content' | 'image' }[] = [
+  { value: 'story', label: 'Story/Text Page', group: 'content' },
+  { value: 'tracing', label: 'Tracing Text', group: 'content' },
+  { value: 'coloring', label: 'Coloring Image', group: 'image' },
+  { value: 'maze', label: 'Maze Game', group: 'image' },
+  { value: 'dot-to-dot', label: 'Dot-to-Dot Game', group: 'image' },
+  { value: 'image', label: 'Full Page Image', group: 'image' },
 ];
 
 export default function SinglePageEditor({
@@ -48,7 +49,7 @@ export default function SinglePageEditor({
   totalPages,
   pageContent,
   pageImage,
-  pageActivityType = 'coloring', // Default to coloring
+  pageActivityType = ['coloring'], // Default to coloring
   bookPrompt,
   hasFrontCover,
   hasBackCover,
@@ -57,26 +58,26 @@ export default function SinglePageEditor({
   onGenerateText,
   onGenerateImage,
   onGenerateCoverImage,
-  onUploadImage, // Destructure new prop
+  onUploadImage,
   onNextPage,
   onPreviousPage,
   onSaveBook,
   onUpdateContent,
   onSwitchToFrontCover,
   onSwitchToBackCover,
-  onSwitchToPages, // Destructure new prop
+  onSwitchToPages,
   onAddNewPage,
   onInsertPageAfter,
   onCompleteBook,
-  onOpenSettings, // Destructure new prop
-  onEditImage, // Destructure new prop
+  onOpenSettings,
+  onEditImage,
   isSaving,
 }: SinglePageEditorProps) {
   const [prompt, setPrompt] = useState('');
-  const [activityType, setActivityType] = useState<PageActivityType>(pageActivityType);
+  const [activityTypes, setActivityTypes] = useState<PageActivityType[]>(pageActivityType);
   const [isGeneratingText, setIsGeneratingText] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [isUploading, setIsUploading] = useState(false); // New state for upload
+  const [isUploading, setIsUploading] = useState(false);
   const [editedContent, setEditedContent] = useState(pageContent);
   const [isEditingContent, setIsEditingContent] = useState(false);
 
@@ -87,9 +88,21 @@ export default function SinglePageEditor({
   }, [pageContent]);
 
   useEffect(() => {
-    // Covers should always default to 'image' type internally for saving purposes
-    setActivityType(isCoverView ? 'image' : pageActivityType);
+    // Covers should always default to ['image'] type internally
+    setActivityTypes(isCoverView ? ['image'] : pageActivityType);
   }, [pageActivityType, isCoverView]);
+
+  const handleToggleActivity = (type: PageActivityType) => {
+    setActivityTypes(prev => {
+      const newTypes = prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type];
+      
+      // Ensure the parent state is updated immediately
+      onUpdateContent(editedContent, newTypes);
+      return newTypes;
+    });
+  };
 
   const handleGenerate = async (type: 'text' | 'image') => {
     const finalPrompt = prompt.trim() || bookPrompt;
@@ -99,7 +112,6 @@ export default function SinglePageEditor({
     }
 
     if (isCoverView) {
-      // Covers only generate images
       if (type === 'image') {
         setIsGeneratingImage(true);
         try {
@@ -115,16 +127,24 @@ export default function SinglePageEditor({
 
     // Regular pages
     if (type === 'text') {
+      if (!activityTypes.some(t => t === 'story' || t === 'tracing')) {
+        alert('Please select a content activity type (Story or Tracing) before generating text.');
+        return;
+      }
       setIsGeneratingText(true);
       try {
-        await onGenerateText(currentPage, finalPrompt, activityType);
+        await onGenerateText(currentPage, finalPrompt, activityTypes);
       } finally {
         setIsGeneratingText(false);
       }
     } else {
+      if (!activityTypes.some(t => t === 'coloring' || t === 'maze' || t === 'dot-to-dot' || t === 'image')) {
+        alert('Please select an image activity type (Coloring, Maze, Dot-to-Dot, or Image) before generating an image.');
+        return;
+      }
       setIsGeneratingImage(true);
       try {
-        await onGenerateImage(currentPage, finalPrompt, activityType);
+        await onGenerateImage(currentPage, finalPrompt, activityTypes);
       } finally {
         setIsGeneratingImage(false);
       }
@@ -138,35 +158,33 @@ export default function SinglePageEditor({
       setIsUploading(true);
       try {
         await onUploadImage(file);
-        // NOTE: Parent component (BookEditor) handles updating page state with imageUrl and activityType: 'image'
+        // Ensure 'image' activity type is selected when uploading
+        if (!activityTypes.includes('image')) {
+          setActivityTypes(prev => {
+            const newTypes = [...prev, 'image' as PageActivityType];
+            onUpdateContent(editedContent, newTypes);
+            return newTypes;
+          });
+        }
       } catch (error) {
         console.error('Upload failed:', error);
         alert('Image upload failed. Please try again.');
       } finally {
         setIsUploading(false);
-        // Reset file input value to allow re-uploading the same file
         e.target.value = ''; 
       }
     }
   };
 
   const handleSaveEdit = () => {
-    // Covers are always saved with 'image' activity type
-    const finalActivityType = isCoverView ? 'image' : activityType;
-    onUpdateContent(editedContent, finalActivityType);
+    const finalActivityTypes = isCoverView ? ['image' as PageActivityType] : activityTypes;
+    onUpdateContent(editedContent, finalActivityTypes);
     setIsEditingContent(false);
   };
 
   const handleCancelEdit = () => {
     setEditedContent(pageContent);
     setIsEditingContent(false);
-  };
-
-  const handleActivityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newActivityType = e.target.value as PageActivityType;
-    setActivityType(newActivityType);
-    // Immediately update content/activity type in parent state
-    onUpdateContent(editedContent, newActivityType);
   };
 
   const completedPages = totalPages > 0 ? currentPage : 0;
@@ -238,22 +256,23 @@ export default function SinglePageEditor({
           {/* Activity Type Selector (Only for regular pages) */}
           {!isCoverView && (
             <div>
-              <label htmlFor="activityType" className="block text-sm font-medium text-gray-700 mb-2">
-                Activity Type:
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Activities:
               </label>
-              <select
-                id="activityType"
-                value={activityType}
-                onChange={handleActivityChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={isGenerating}
-              >
-                {ACTIVITY_OPTIONS.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
+              <div className="space-y-2">
+                {ACTIVITY_OPTIONS.filter(opt => opt.value !== 'image').map(option => (
+                  <label key={option.value} className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100">
+                    <input
+                      type="checkbox"
+                      checked={activityTypes.includes(option.value)}
+                      onChange={() => handleToggleActivity(option.value)}
+                      className="rounded text-blue-600 focus:ring-blue-500"
+                      disabled={isGenerating}
+                    />
+                    <span className="text-sm font-medium text-gray-700">{option.label}</span>
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
           )}
 
@@ -272,8 +291,8 @@ export default function SinglePageEditor({
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            {/* Generate Text Button (Only for pages, not covers) */}
-            {!isCoverView && (
+            {/* Generate Text Button (Only if content activity is selected) */}
+            {!isCoverView && activityTypes.some(t => t === 'story' || t === 'tracing') && (
               <button
                 onClick={() => handleGenerate('text')}
                 disabled={isGenerating}
@@ -293,12 +312,12 @@ export default function SinglePageEditor({
               </button>
             )}
 
-            {/* Generate Image Button (For pages and covers) */}
+            {/* Generate Image Button (Only if image activity is selected) */}
             <button
               onClick={() => handleGenerate('image')}
               disabled={isGenerating}
               className={`w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
-                isCoverView ? 'col-span-2' : ''
+                isCoverView || !activityTypes.some(t => t === 'coloring' || t === 'maze' || t === 'dot-to-dot' || t === 'image') ? 'col-span-2' : ''
               }`}
             >
               {isGeneratingImage ? (
