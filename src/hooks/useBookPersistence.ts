@@ -125,7 +125,8 @@ export default function useBookPersistence({
 
       if (uploadError) {
         console.error('Storage Upload Error:', uploadError);
-        throw uploadError;
+        // Throw the specific error message from Supabase
+        throw new Error(`Storage Upload Failed: ${uploadError.message}`);
       }
 
       // 2. Get the public URL
@@ -191,7 +192,7 @@ export default function useBookPersistence({
       alert('Image uploaded successfully!');
     } catch (error: any) {
       console.error('Image Upload Error:', error);
-      alert('Failed to upload image.');
+      alert(`Failed to upload image: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -261,7 +262,8 @@ export default function useBookPersistence({
 
       if (uploadError) {
         console.error('Storage Upload Error:', uploadError);
-        throw uploadError;
+        // Throw the specific error message from Supabase
+        throw new Error(`Storage Upload Failed: ${uploadError.message}`);
       }
 
       // 2. Get the public URL
@@ -290,7 +292,7 @@ export default function useBookPersistence({
       setImageToEdit(null);
     } catch (error: any) {
       console.error('Image Edit Save Error:', error);
-      alert('Failed to save edited image.');
+      alert(`Failed to save edited image: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
