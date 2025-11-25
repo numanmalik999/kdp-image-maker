@@ -58,6 +58,8 @@ export default function useBookPersistence({
       
       // The image URL should be the one currently in the local state (updated by image upload/generation)
       const imageUrlToSave = existingPage?.imageUrl; 
+      
+      console.log(`[SavePage] Page ${pageNumber} - Image URL to save:`, imageUrlToSave);
 
       const { error } = await supabase
         .from('book_pages')
@@ -86,7 +88,7 @@ export default function useBookPersistence({
           pageNumber,
           content,
           imageUrl: imageUrlToSave,
-          activityTypes: activityTypes, // <-- Ensure we use the latest activityTypes array
+          activityTypes: activityTypes,
         };
         
         if (index >= 0) {
