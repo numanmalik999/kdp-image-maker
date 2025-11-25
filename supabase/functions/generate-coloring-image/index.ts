@@ -12,6 +12,7 @@ interface RequestBody {
   prompt: string;
   activityTypes?: string[];
   tracingWord?: string;
+  // bookId removed
 }
 
 // @ts-ignore: Deno is available in edge runtime
@@ -34,7 +35,6 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // OpenAI key from environment
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     if (!openaiApiKey) {
       return new Response(JSON.stringify({ error: "AI service not configured" }), {
