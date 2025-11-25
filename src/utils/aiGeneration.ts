@@ -1,4 +1,4 @@
-import { Chapter, PageActivityType } from '../types';
+import { PageActivityType } from '../types';
 import { SUPABASE_URL } from '../lib/config';
 
 export interface GeneratedContent {
@@ -27,8 +27,8 @@ export async function generateBookContent(
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || 'Failed to generate book content');
+    const errorData = await res.text();
+    throw new Error(errorData || 'Failed to generate book content');
   }
 
   return await res.json() as GeneratedContent;
@@ -69,8 +69,8 @@ export async function generatePageContent(
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || 'Failed to generate page content');
+    const errorData = await res.text();
+    throw new Error(errorData || 'Failed to generate page content');
   }
 
   const data = await res.json();
@@ -109,8 +109,8 @@ export async function generateColoringImage(
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || 'Failed to generate image');
+    const errorData = await res.text();
+    throw new Error(errorData || 'Failed to generate image');
   }
 
   const data = await res.json();

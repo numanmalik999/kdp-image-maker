@@ -10,7 +10,6 @@ const corsHeaders = {
 
 interface RequestBody {
   prompt: string;
-  bookId?: string;
   activityTypes?: string[];
   tracingWord?: string;
 }
@@ -25,32 +24,25 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { prompt, bookId, activityTypes, tracingWord }: RequestBody = await req.json();
+    const requestBody = await req.json();
+    const { prompt, activityTypes, tracingWord } = requestBody as RequestBody;
 
     if (!prompt) {
-      return new Response(
-        JSON.stringify({ error: "Prompt is required" }),
-        {
-          status: 400,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Prompt is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // @ts-ignore: OpenAI key provided in environment by edge runtime
+    // OpenAI key from environment
     const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-
     if (!openaiApiKey) {
-      return new Response(
-        JSON.stringify({ error: "AI service not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "AI service not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Build prompt with tracing word if provided
     let styleModifier = "A simple, clean black and white line art coloring page illustration suitable for coloring books. Use clear, bold outlines with no shading or colors, just black lines on a white background.";
 
     if (activityTypes?.includes('maze')) {
@@ -63,7 +55,6 @@ Deno.serve(async (req: Request) => {
       styleModifier = "Simple, clean black and white line art illustration suitable for coloring books. Use clear, bold outlines with no shading or colors, just black lines on a white background. Subject: ";
     }
 
-    // If tracingWord is provided, request it to appear in the image
     const tracingNote = tracingWord && tracingWord.trim()
       ? ` Include the tracing word '${tracingWord}' in large bold letters at the bottom of the image for tracing practice.`
       : '';
@@ -97,9 +88,7 @@ Deno.serve(async (req: Request) => {
     const data = await response.json();
     const imageUrl = data.data[0].url;
 
-    // If a bookId is provided, attempt to upload to storage (best-effort)
-    // Storage path handling is omitted in this patch to keep things lean.
-    // Return the public URL directly for now.
+    // Return the image URL directly for now
     return new Response(
       JSON.stringify({ imageUrl }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
