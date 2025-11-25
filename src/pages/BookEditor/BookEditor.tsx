@@ -275,7 +275,15 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       if (!user) throw new Error('Not authenticated');
 
       const fileExtension = file.name.split('.').pop();
-      const fileName = `${bookId}/${viewMode}-${currentPage}-${Date.now()}.${fileExtension}`;
+      
+      let fileName: string;
+      if (viewMode === 'front-cover') {
+        fileName = `${bookId}/front-cover-${Date.now()}.${fileExtension}`;
+      } else if (viewMode === 'back-cover') {
+        fileName = `${bookId}/back-cover-${Date.now()}.${fileExtension}`;
+      } else {
+        fileName = `${bookId}/page-${currentPage}-${Date.now()}.${fileExtension}`;
+      }
 
       const { data, error } = await supabase.storage
         .from('book-images')
@@ -315,6 +323,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       setTimeout(() => setShowToast(false), 2000);
     } catch (error) {
       console.error('Error uploading image:', error);
+      alert('Failed to upload image.');
       throw new Error('Failed to upload image.');
     }
   };
@@ -332,7 +341,14 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       if (!user) throw new Error('Not authenticated');
 
       // Upload the cropped blob back to storage
-      const fileName = `${bookId}/${viewMode}-${currentPage}-cropped-${Date.now()}.png`;
+      let fileName: string;
+      if (viewMode === 'front-cover') {
+        fileName = `${bookId}/front-cover-cropped-${Date.now()}.png`;
+      } else if (viewMode === 'back-cover') {
+        fileName = `${bookId}/back-cover-cropped-${Date.now()}.png`;
+      } else {
+        fileName = `${bookId}/page-${currentPage}-cropped-${Date.now()}.png`;
+      }
 
       const { data, error } = await supabase.storage
         .from('book-images')
