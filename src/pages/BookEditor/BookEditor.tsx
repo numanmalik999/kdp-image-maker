@@ -7,7 +7,7 @@ import Sidebar from '../../components/Sidebar';
 import BookSettingsModal from '../../components/BookSettingsModal';
 import ExportModal from '../../components/ExportModal';
 import ImageEditorModal from '../../components/ImageEditorModal';
-import { BookSettings, Chapter, Page, TrimSize, FontSize, PageActivityType } from '../../types';
+import { BookSettings, Chapter, Page, TrimSize, FontSize } from '../../types';
 import { SAMPLE_CHAPTERS, SAMPLE_SINGLE_TEXT } from '../../utils/sampleContent';
 import { generateBookContent, convertToChapters, convertToSingleText, generatePageContent, generateColoringImage } from '../../utils/aiGeneration';
 import { checkAICredits, decrementAICredits, incrementPageCount, incrementImageCount, checkPageCreationLimit } from '../../utils/subscriptionLimits';
@@ -395,7 +395,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     if (page?.imageUrl) {
       // Proxy the image URL through the edge function to avoid CORS issues during canvas manipulation
       const proxiedUrl = `${SUPABASE_URL}/functions/v1/proxy-image?url=${encodeURIComponent(page.imageUrl)}`;
-      setImageToEdit({ src: proxiedUrl, pageNumber }); // FIX: Changed proxiedNumber to proxiedUrl
+      setImageToEdit({ src: proxiedUrl, pageNumber });
       setIsImageEditorModalOpen(true);
     } else {
       alert('No image found for this page to edit.');
@@ -411,7 +411,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       const filename = `${bookId}/${pageNumber}-${Date.now()}.png`;
 
       // 1. Upload the new image blob to Supabase Storage
-      const { data: _uploadData, error: uploadError } = await supabase.storage // FIX: Destructured as _uploadData
+      const { data: _uploadData, error: uploadError } = await supabase.storage
         .from('coloring_images')
         .upload(filename, editedImageBlob, {
           cacheControl: '3600',
