@@ -11,6 +11,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Footer from './components/Footer';
 import { Loader2 } from 'lucide-react';
+import { SUPABASE_URL } from './lib/config';
 
 type UserRole = 'user' | 'admin' | null;
 type UserTier = 'free' | 'pro' | 'premium';
@@ -147,9 +148,7 @@ function App() {
         return;
       }
 
-      // Hardcoded Supabase URL to ensure Edge Function call works
-      const supabaseUrl = 'https://lrwjdykjaulwwdswuuoa.supabase.co';
-      const apiUrl = `${supabaseUrl}/functions/v1/create-portal-session`;
+      const apiUrl = `${SUPABASE_URL}/functions/v1/create-portal-session`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',

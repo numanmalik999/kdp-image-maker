@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Zap, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { SUPABASE_URL } from '../lib/config';
 
 interface PricingProps {
   currentTier?: 'free' | 'pro' | 'premium';
@@ -28,10 +29,7 @@ export default function Pricing({ currentTier = 'free', onBack, onAuthRequired }
     try {
       setLoading(planType);
 
-      // Note: VITE_SUPABASE_URL is not available in the client environment unless explicitly set in vite.config.ts or .env
-      // Using the hardcoded URL from App.tsx logic for consistency, although it should ideally come from config.
-      const supabaseUrl = 'https://lrwjdykjaulwwdswuuoa.supabase.co';
-      const apiUrl = `${supabaseUrl}/functions/v1/create-checkout-session`;
+      const apiUrl = `${SUPABASE_URL}/functions/v1/create-checkout-session`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
