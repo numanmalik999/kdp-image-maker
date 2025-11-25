@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { BookSettings, Page, Chapter } from '../types';
+import { BookSettings, Page, Chapter, PageActivityType } from '../types';
 import { BookData } from './useBookData';
 
 interface UseBookPersistenceProps {
@@ -124,16 +124,17 @@ export default function useBookPersistence({
     }
   };
 
-  const handleSavePageContent = async (pageNumber: number, content: string, activityTypes: string[]) => {
+  const handleSavePageContent = async (pageNumber: number, content: string, activityTypes: PageActivityType[]) => {
     if (!bookId) return;
     setIsSaving(true);
     try {
+      // Find the latest state of the page from the hook's props
       const existingPage = pages.find(p => p.pageNumber === pageNumber);
       
       const isFrontCover = pageNumber === 0;
       const isBackCover = book && pageNumber === book.target_pages + 1;
       
-      // Use the image URL from the current local state (which might have been updated by handleImageUpload)
+      // The image URL should be the one currently in the local state (updated by image upload/generation)
       const imageUrlToSave = existingPage?.imageUrl; 
 
       const { error } = await supabase
@@ -142,9 +143,9 @@ export default function useBookPersistence({
           book_id: bookId,
           page_number: pageNumber,
           content: content,
-          // Ensure activity_type is set, defaulting to 'story' if array is empty
+          // Use the activityTypes passed from the editor, defaulting if empty
           activity_type: activityTypes[0] || 'story', 
-          image_url: imageUrlToSave, // Save the image URL from local state
+          image_url: imageUrlToSave, 
           is_front_cover: isFrontCover,
           is_back_cover: isBackCover,
         }, { onConflict: 'book_id, page_number' });
@@ -154,17 +155,18 @@ export default function useBookPersistence({
         throw error;
       }
 
-      // Update local state (only needed if we didn't already update it, but safe to run)
+      // Since the DB operation succeeded, we ensure the local state is fully consistent
+      // by updating the page record with all the saved data.
       setPages(prev => {
         const index = prev.findIndex(p => p.pageNumber === pageNumber);
         const newPage: Page = {
-          id: existingPage?.id || `temp-${pageNumber}`,
+          id: existingPage?.id || `db-temp-${pageNumber}`, // Use a temporary ID if none exists yet
           pageNumber,
           content,
           imageUrl: imageUrlToSave,
-          activityTypes: existingPage?.activityTypes,
+          activityTypes: activityTypes,
         };
-
+        
         if (index >= 0) {
           const newPages = [...prev];
           newPages[index] = newPage;

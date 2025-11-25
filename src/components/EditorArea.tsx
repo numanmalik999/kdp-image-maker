@@ -1,4 +1,4 @@
-import { Chapter, Page } from '../types';
+import { Chapter, Page, PageActivityType } from '../types';
 import { FileText, BookOpen, Download, FileStack, BookOpenCheck, BookOpenText, Save } from 'lucide-react';
 import SingleTextEditor from './SingleTextEditor';
 import ChaptersEditor from './ChaptersEditor';
@@ -26,7 +26,7 @@ interface EditorAreaProps {
   bookPrompt: string;
   currentPageNumber: number;
   onPageChange: (newPageNumber: number) => void;
-  onSavePageContent: (pageNumber: number, content: string, activityTypes: string[]) => Promise<void>;
+  onSavePageContent: (pageNumber: number, content: string, activityTypes: PageActivityType[]) => Promise<void>;
   onImageUpload: (pageNumber: number, file: File) => Promise<void>;
   onDeletePage: (pageNumber: number) => Promise<void>;
   isSaving: boolean;
