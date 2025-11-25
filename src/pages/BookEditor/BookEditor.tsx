@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
-import { ArrowLeft, Settings, Loader2, Zap } from 'lucide-react';
+import { ArrowLeft, Settings, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import EditorArea from '../../components/EditorArea';
 import Sidebar from '../../components/Sidebar';
@@ -76,7 +76,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       // For simplicity, we won't try to reconstruct chapters/single text from pages yet.
       // We assume the primary editing mode is 'pages'.
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading book:', error);
       alert('Failed to load book data.');
     } finally {
@@ -395,7 +395,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     if (page?.imageUrl) {
       // Proxy the image URL through the edge function to avoid CORS issues during canvas manipulation
       const proxiedUrl = `${SUPABASE_URL}/functions/v1/proxy-image?url=${encodeURIComponent(page.imageUrl)}`;
-      setImageToEdit({ src: proxiedNumber, pageNumber });
+      setImageToEdit({ src: proxiedUrl, pageNumber }); // FIX: Changed proxiedNumber to proxiedUrl
       setIsImageEditorModalOpen(true);
     } else {
       alert('No image found for this page to edit.');
@@ -408,10 +408,10 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     setIsSaving(true);
     try {
       const pageNumber = imageToEdit.pageNumber;
-      const filename = `${bookId}/${pageNumber}-${Date.now()}.png`; // Corrected template literal syntax
+      const filename = `${bookId}/${pageNumber}-${Date.now()}.png`;
 
       // 1. Upload the new image blob to Supabase Storage
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { data: _uploadData, error: uploadError } = await supabase.storage // FIX: Destructured as _uploadData
         .from('coloring_images')
         .upload(filename, editedImageBlob, {
           cacheControl: '3600',
@@ -518,7 +518,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           onPagesChange={handlePagesChange}
           onGeneratePage={handleGeneratePage}
           onGenerateImage={handleGenerateImage}
-          onEditImage={handleEditImage} // Passed down
+          onEditImage={handleEditImage}
           fontSize={book.font_size}
           onGeneratePDF={handleGeneratePDF}
           isGenerating={isGeneratingAI}
