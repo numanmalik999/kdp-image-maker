@@ -64,13 +64,17 @@ export default function useBookPersistence({
           book_id: bookId,
           page_number: pageNumber,
           content: content,
-          activity_type: activityTypes[0] || 'story',
+          // Ensure activity_type is set, defaulting to 'story' if array is empty
+          activity_type: activityTypes[0] || 'story', 
           image_url: existingPage?.imageUrl,
           is_front_cover: isFrontCover,
           is_back_cover: isBackCover,
         }, { onConflict: 'book_id, page_number' });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase Save Page Error:', error);
+        throw error;
+      }
 
       // Update local state
       setPages(prev => {
@@ -105,7 +109,7 @@ export default function useBookPersistence({
       alert('Page content saved!');
     } catch (error: any) {
       console.error('Error saving page content:', error);
-      alert('Failed to save page content.');
+      alert(`Failed to save page content: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
