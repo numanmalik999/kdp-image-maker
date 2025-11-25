@@ -194,7 +194,13 @@ function App() {
             } />
             <Route path="/login" element={<Login onLoginSuccess={handleLoginSuccess} onSwitchToSignup={() => navigate('/signup')} />} />
             <Route path="/signup" element={<Signup onSignupSuccess={handleSignupSuccess} onSwitchToLogin={() => navigate('/login')} />} />
-            <Route path="/pricing" element={<Pricing currentTier={userTier} onBack={() => navigate(-1)} onAuthRequired={(type) => navigate(type === 'login' ? '/login' : '/signup')} />} />
+            <Route path="/pricing" element={
+              <Pricing 
+                currentTier={userTier} 
+                onBack={() => navigate(-1)} 
+                onAuthRequired={!user ? (type) => navigate(type === 'login' ? '/login' : '/signup') : undefined} 
+              />
+            } />
             <Route path="/page/:slug" element={<StaticPage slug={location.pathname.split('/').pop() || ''} onBack={() => navigate(-1)} />} />
 
             {/* Authenticated Routes */}
