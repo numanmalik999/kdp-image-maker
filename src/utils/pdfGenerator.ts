@@ -10,4 +10,5 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
   const widthInches = dimensions.width;
   // Minimal stub: no actual PDF generation logic to keep TS happy in this patch
   void widthInches;
+  void pages; // Suppress unused variable error
 }
