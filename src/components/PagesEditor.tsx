@@ -151,6 +151,7 @@ export default function PagesEditor({
   };
   
   const handleSave = () => {
+    // When saving, we use the current local content and the current activities
     onSavePageContent(currentPageNumber, localContent, currentActivities);
   };
 
@@ -307,16 +308,15 @@ export default function PagesEditor({
         
         {/* Manual Actions */}
         <div className="space-y-3 mb-6 pt-4 border-t border-gray-100">
-          {hasTextActivity && (
-            <button
-              onClick={handleSave}
-              disabled={isSaving || isGenerating}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {isSaving ? 'Saving...' : 'Save Page Content'}
-            </button>
-          )}
+          {/* Save Page button is now always visible */}
+          <button
+            onClick={handleSave}
+            disabled={isSaving || isGenerating}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {isSaving ? 'Saving...' : 'Save Page'}
+          </button>
 
           {hasImageActivity && (
             <>

@@ -114,13 +114,6 @@ export default function useBookPersistence({
 
       if (upsertError) throw upsertError;
       
-      // 2. Reload the book data to get the updated pages and ensure local state is consistent
-      // Note: We rely on the caller (BookEditor) to trigger a full reload via loadBook if necessary, 
-      // but for immediate feedback, we update the local pages state based on the upserted data.
-      
-      // For simplicity and consistency, we'll rely on the caller to reload the data 
-      // or manually update the pages array if needed. For now, we just alert success.
-      
       alert('All content saved successfully!');
       
     } catch (error: any) {
@@ -140,6 +133,9 @@ export default function useBookPersistence({
       const isFrontCover = pageNumber === 0;
       const isBackCover = book && pageNumber === book.target_pages + 1;
       
+      // Use the image URL from the current local state (which might have been updated by handleImageUpload)
+      const imageUrlToSave = existingPage?.imageUrl; 
+
       const { error } = await supabase
         .from('book_pages')
         .upsert({
@@ -148,7 +144,7 @@ export default function useBookPersistence({
           content: content,
           // Ensure activity_type is set, defaulting to 'story' if array is empty
           activity_type: activityTypes[0] || 'story', 
-          image_url: existingPage?.imageUrl,
+          image_url: imageUrlToSave, // Save the image URL from local state
           is_front_cover: isFrontCover,
           is_back_cover: isBackCover,
         }, { onConflict: 'book_id, page_number' });
@@ -158,14 +154,14 @@ export default function useBookPersistence({
         throw error;
       }
 
-      // Update local state
+      // Update local state (only needed if we didn't already update it, but safe to run)
       setPages(prev => {
         const index = prev.findIndex(p => p.pageNumber === pageNumber);
         const newPage: Page = {
           id: existingPage?.id || `temp-${pageNumber}`,
           pageNumber,
           content,
-          imageUrl: existingPage?.imageUrl,
+          imageUrl: imageUrlToSave,
           activityTypes: existingPage?.activityTypes,
         };
 
@@ -188,10 +184,10 @@ export default function useBookPersistence({
         setBook((prev: BookData | null) => prev ? { ...prev, ...updateData } as BookData : null);
       }
 
-      alert('Page content saved!');
+      alert('Page saved successfully!');
     } catch (error: any) {
       console.error('Error saving page content:', error);
-      alert(`Failed to save page content: ${error.message}`);
+      alert(`Failed to save page: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -260,7 +256,6 @@ export default function useBookPersistence({
 
       if (uploadError) {
         console.error('Storage Upload Error:', uploadError);
-        // Throw the specific error message from Supabase
         throw new Error(`Storage Upload Failed: ${uploadError.message}`);
       }
 
@@ -275,28 +270,7 @@ export default function useBookPersistence({
       const currentPageState = pages.find(p => p.pageNumber === pageNumber);
       const activityTypes = currentPageState?.activityTypes || ['image'];
       
-      const isFrontCover = pageNumber === 0;
-      const isBackCover = book && pageNumber === book.target_pages + 1;
-
-      // 3. Update the page in the database
-      const { error: dbError } = await supabase
-        .from('book_pages')
-        .upsert({
-          book_id: bookId,
-          page_number: pageNumber,
-          image_url: newImageUrl,
-          content: currentPageState?.content || '',
-          activity_type: activityTypes[0] || 'image',
-          is_front_cover: isFrontCover,
-          is_back_cover: isBackCover,
-        }, { onConflict: 'book_id, page_number' });
-
-      if (dbError) {
-        console.error('Database Update Error:', dbError);
-        throw dbError;
-      }
-
-      // 4. Update local state
+      // 3. Update local state with the new image URL
       setPages(prev => {
         const index = prev.findIndex(p => p.pageNumber === pageNumber);
         const newPage: Page = {
@@ -304,7 +278,7 @@ export default function useBookPersistence({
           pageNumber,
           content: currentPageState?.content || '',
           imageUrl: newImageUrl,
-          activityTypes: activityTypes, // Use the determined activity types
+          activityTypes: activityTypes,
         };
 
         if (index >= 0) {
@@ -316,17 +290,9 @@ export default function useBookPersistence({
         }
       });
       
-      // If saving a cover for the first time, update book status
-      if ((isFrontCover && !book?.has_front_cover) || (isBackCover && !book?.has_back_cover)) {
-        const updateData: Partial<BookData> = {};
-        if (isFrontCover) updateData.has_front_cover = true;
-        if (isBackCover) updateData.has_back_cover = true;
-        
-        await supabase.from('books').update(updateData).eq('id', bookId);
-        setBook((prev: BookData | null) => prev ? { ...prev, ...updateData } as BookData : null);
-      }
+      // 4. Alert user to click the Save Page button
+      alert('Image uploaded successfully! Click "Save Page" to persist changes.');
 
-      alert('Image uploaded successfully!');
     } catch (error: any) {
       console.error('Image Upload Error:', error);
       alert(`Failed to upload image: ${error.message}`);
@@ -364,7 +330,7 @@ export default function useBookPersistence({
 
       const newImageUrl = publicUrlData.publicUrl;
 
-      // 3. Update the page in the database
+      // 3. Update the page in the database (Immediate persistence for image editing)
       const { error: dbError } = await supabase
         .from('book_pages')
         .update({ image_url: newImageUrl })
