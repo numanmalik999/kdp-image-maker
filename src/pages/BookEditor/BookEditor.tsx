@@ -6,7 +6,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import SinglePageEditor from '../../components/SinglePageEditor';
 import ExportModal from '../../components/ExportModal';
 import BookSettingsModal from '../../components/BookSettingsModal';
-import ImageEditorModal from '../../components/ImageEditorModal'; // Updated import
+import ImageEditorModal from '../../components/ImageEditorModal';
 import { generatePDF } from '../../utils/pdfGenerator';
 import { checkAICredits, decrementAICredits, incrementImageCount, checkPageCreationLimit, incrementPageCount } from '../../utils/subscriptionLimits';
 
@@ -270,10 +270,13 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       return;
     }
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not authenticated');
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert('Authentication required to upload images.');
+      throw new Error('Not authenticated');
+    }
 
+    try {
       const fileExtension = file.name.split('.').pop();
       
       let fileName: string;
@@ -292,7 +295,10 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
           upsert: false,
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase Storage upload error:', error);
+        throw new Error(`Failed to upload image: ${error.message}`);
+      }
 
       const { data: publicUrlData } = supabase.storage
         .from('book-images')
@@ -323,8 +329,8 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
       setTimeout(() => setShowToast(false), 2000);
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert('Failed to upload image.');
-      throw new Error('Failed to upload image.');
+      alert(`Failed to upload image. Check console for details.`);
+      throw error;
     }
   };
 
@@ -333,7 +339,6 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
     setShowCropModal(true);
   };
 
-  // Renamed from handleCropComplete to handleEditComplete
   const handleEditComplete = async (editedImageBlob: Blob) => {
     if (!book) return;
 
@@ -860,7 +865,7 @@ export default function BookEditor({ bookId, onBack }: BookEditorProps) {
             setImageToCrop(null);
           }}
           src={imageToCrop}
-          onEditComplete={handleEditComplete} // Updated handler name
+          onEditComplete={handleEditComplete}
           isProcessing={saving}
         />
       )}
