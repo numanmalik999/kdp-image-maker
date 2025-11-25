@@ -28,7 +28,10 @@ export default function Pricing({ currentTier = 'free', onBack, onAuthRequired }
     try {
       setLoading(planType);
 
-      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`;
+      // Note: VITE_SUPABASE_URL is not available in the client environment unless explicitly set in vite.config.ts or .env
+      // Using the hardcoded URL from App.tsx logic for consistency, although it should ideally come from config.
+      const supabaseUrl = 'https://lrwjdykjaulwwdswuuoa.supabase.co';
+      const apiUrl = `${supabaseUrl}/functions/v1/create-checkout-session`;
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -123,7 +126,7 @@ export default function Pricing({ currentTier = 'free', onBack, onAuthRequired }
             onClick={onBack}
             className="mb-6 text-blue-600 hover:text-blue-700 font-medium"
           >
-            ← Back to {currentTier === 'free' ? 'Landing' : 'Dashboard'}
+            ← Back to {isLoggedOut ? 'Landing' : 'Dashboard'}
           </button>
         )}
 
@@ -140,18 +143,22 @@ export default function Pricing({ currentTier = 'free', onBack, onAuthRequired }
           {plans.map((plan) => {
             const isCurrentPlan = !isLoggedOut && plan.type === currentTier;
             
-            let ctaText = plan.cta;
-            let buttonAction = () => {};
+            let ctaText: string;
+            let buttonAction: () => void;
             let isDisabled = isCurrentPlan || loading !== null;
 
             if (isLoggedOut) {
+              // Logged out user sees Sign Up / Login for all plans
               ctaText = 'Sign Up / Login';
               buttonAction = () => onAuthRequired!('signup');
               isDisabled = false;
             } else if (isCurrentPlan) {
+              // Logged in user sees Current Plan
               ctaText = 'Current Plan';
               isDisabled = true;
+              buttonAction = () => {};
             } else {
+              // Logged in user sees Upgrade
               ctaText = plan.cta;
               buttonAction = () => handleUpgrade(plan.type as 'pro' | 'premium');
               isDisabled = loading === plan.type;
