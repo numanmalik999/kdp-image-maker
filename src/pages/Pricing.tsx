@@ -10,6 +10,7 @@ interface PricingProps {
 
 export default function Pricing({ currentTier = 'free', onBack, onAuthRequired }: PricingProps) {
   const [loading, setLoading] = useState<string | null>(null);
+  const isLoggedOut = !!onAuthRequired;
 
   const handleUpgrade = async (planType: 'pro' | 'premium') => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -137,15 +138,24 @@ export default function Pricing({ currentTier = 'free', onBack, onAuthRequired }
 
         <div className="grid md:grid-cols-3 gap-8 mb-16">
           {plans.map((plan) => {
-            const isCurrentPlan = plan.type === currentTier;
-            const isFreePlan = plan.type === 'free';
-            const canUpgrade = plan.type !== 'free' && !isCurrentPlan &&
-              (currentTier === 'free' || (currentTier === 'pro' && plan.type === 'premium'));
+            const isCurrentPlan = !isLoggedOut && plan.type === currentTier;
             
-            const ctaText = isCurrentPlan ? 'Current Plan' : 
-                            isFreePlan && !onAuthRequired ? 'Get Started' : // Logged in user on Free plan
-                            isFreePlan && onAuthRequired ? 'Sign Up / Login' : // Logged out user on Landing page
-                            plan.cta;
+            let ctaText = plan.cta;
+            let buttonAction = () => {};
+            let isDisabled = isCurrentPlan || loading !== null;
+
+            if (isLoggedOut) {
+              ctaText = 'Sign Up / Login';
+              buttonAction = () => onAuthRequired!('signup');
+              isDisabled = false;
+            } else if (isCurrentPlan) {
+              ctaText = 'Current Plan';
+              isDisabled = true;
+            } else {
+              ctaText = plan.cta;
+              buttonAction = () => handleUpgrade(plan.type as 'pro' | 'premium');
+              isDisabled = loading === plan.type;
+            }
 
             return (
               <div
@@ -189,14 +199,8 @@ export default function Pricing({ currentTier = 'free', onBack, onAuthRequired }
                   </ul>
 
                   <button
-                    onClick={() => {
-                      if (onAuthRequired && !isCurrentPlan) {
-                        onAuthRequired('signup');
-                      } else if (canUpgrade) {
-                        handleUpgrade(plan.type as 'pro' | 'premium');
-                      }
-                    }}
-                    disabled={isCurrentPlan || (plan.type !== 'free' && loading !== null)}
+                    onClick={buttonAction}
+                    disabled={isDisabled}
                     className={`w-full py-3 px-6 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 ${
                       isCurrentPlan
                         ? 'bg-gray-200 text-gray-600 cursor-not-allowed'
@@ -212,7 +216,7 @@ export default function Pricing({ currentTier = 'free', onBack, onAuthRequired }
                       </>
                     ) : (
                       <>
-                        {plan.type !== 'free' && <Zap className="w-5 h-5" />}
+                        {plan.type !== 'free' && !isLoggedOut && <Zap className="w-5 h-5" />}
                         {ctaText}
                       </>
                     )}

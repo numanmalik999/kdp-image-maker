@@ -30,6 +30,12 @@ interface UserWithSubscription extends Profile {
   subscription?: Subscription;
 }
 
+const LIMITS_MAP = {
+  free: { books_limit: 2, pages_per_book_limit: 20, ai_credits_remaining: 20 },
+  pro: { books_limit: 10, pages_per_book_limit: 50, ai_credits_remaining: 200 },
+  premium: { books_limit: 999999, pages_per_book_limit: 100, ai_credits_remaining: 1000 }
+};
+
 export default function AdminDashboard() {
   const [users, setUsers] = useState<UserWithSubscription[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
@@ -47,6 +53,7 @@ export default function AdminDashboard() {
     try {
       setLoading(true);
 
+      // Fetch Profiles
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
@@ -54,17 +61,21 @@ export default function AdminDashboard() {
 
       if (profilesError) throw profilesError;
 
+      // Fetch Subscriptions
       const { data: subscriptionsData } = await supabase
         .from('subscriptions')
         .select('*');
 
+      const subscriptionsMap = new Map(subscriptionsData?.map(sub => [sub.user_id, sub]));
+
       const usersWithSubscriptions = (profilesData || []).map(user => ({
         ...user,
-        subscription: subscriptionsData?.find(sub => sub.user_id === user.id)
+        subscription: subscriptionsMap.get(user.id)
       }));
 
       setUsers(usersWithSubscriptions);
 
+      // Fetch Books
       const { data: booksData, error: booksError } = await supabase
         .from('books')
         .select('*')
@@ -73,6 +84,7 @@ export default function AdminDashboard() {
       if (booksError) throw booksError;
       setBooks(booksData || []);
 
+      // Fetch Static Pages
       const { data: pagesData, error: pagesError } = await supabase
         .from('static_pages')
         .select('*')
@@ -112,9 +124,8 @@ export default function AdminDashboard() {
       }
 
       alert(data.message);
-      if (data.syncedCount > 0) {
-        loadData();
-      }
+      // Always reload data after sync to ensure the UI reflects new users
+      loadData();
     } catch (error: any) {
       console.error('Error syncing users:', error);
       alert(`Failed to sync users: ${error.message}`);
@@ -127,31 +138,45 @@ export default function AdminDashboard() {
     try {
       setUpdatingUser(userId);
 
+      // 1. Update Subscription table
       const { error: subError } = await supabase
         .from('subscriptions')
-        .update({ plan_type: newTier })
+        .update({ plan_type: newTier, status: 'active' }) // Set status to active manually
         .eq('user_id', userId);
 
       if (subError) throw subError;
 
-      const limits = {
-        free: { books_limit: 2, pages_per_book_limit: 20, ai_credits_remaining: 20 },
-        pro: { books_limit: 10, pages_per_book_limit: 50, ai_credits_remaining: 200 },
-        premium: { books_limit: 999999, pages_per_book_limit: 100, ai_credits_remaining: 1000 }
-      };
+      // 2. Update Profile table (limits and tier)
+      const limits = LIMITS_MAP[newTier];
 
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
           subscription_tier: newTier,
-          ...limits[newTier]
+          ...limits
         })
         .eq('id', userId);
 
       if (profileError) throw profileError;
 
+      // 3. Update local state immediately for responsiveness
+      setUsers(prevUsers => prevUsers.map(user => {
+        if (user.id === userId) {
+          return {
+            ...user,
+            subscription_tier: newTier,
+            ...limits,
+            subscription: {
+              ...(user.subscription || {}),
+              plan_type: newTier,
+              status: 'active',
+            } as Subscription,
+          };
+        }
+        return user;
+      }));
+
       alert(`Subscription updated to ${newTier}!`);
-      loadData();
     } catch (error: any) {
       console.error('Error updating subscription:', error);
       alert(`Failed to update subscription: ${error.message}`);
