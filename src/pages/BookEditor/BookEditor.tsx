@@ -1,5 +1,9 @@
 /* @ts-nocheck */
-export default function BookEditor({ bookId, onBack }: { bookId: string; onBack: () => void; }) {
+import { useParams } from 'react-router-dom';
+
+export default function BookEditor({ onBack }: { onBack: () => void; }) {
+  const { bookId } = useParams();
+  
   return (
     <div className="p-4">
       <button onClick={onBack} className="text-blue-600">Back</button>
