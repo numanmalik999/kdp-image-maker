@@ -37,8 +37,11 @@ export default function Landing({ onGetStarted, onSignIn, onSignUp }: LandingPro
           <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 mb-6 leading-tight">
             The Fastest Way to Publish <span className="text-blue-600">AI-Generated Coloring Books</span> on KDP
           </h1>
-          <p className="text-xl text-gray-600 mb-10">
+          <p className="text-xl text-gray-600 mb-4">
             Generate unique, high-quality coloring pages, tracing activities, and story content, all formatted perfectly for Amazon KDP.
+          </p>
+          <p className="text-2xl font-semibold text-purple-700 mb-10">
+            Bring your own API keys and start creating books today!
           </p>
           <button
             onClick={onGetStarted}
