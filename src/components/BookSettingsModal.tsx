@@ -59,14 +59,14 @@ export default function BookSettingsModal({
       ...prev,
       [id]: isCheckbox
         ? checked 
-        : (id === 'targetPages' || id === 'fontSize' ? parseInt(value) || 0 : value),
+        : (id === 'fontSize' ? parseInt(value) || 0 : value),
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.title.trim() || formData.targetPages < 1) {
-      alert('Title and target pages are required.');
+    if (!formData.title.trim()) {
+      alert('Title is required.');
       return;
     }
     await onSave(formData);
@@ -107,7 +107,7 @@ export default function BookSettingsModal({
           />
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
             <label htmlFor="trimSize" className="block text-sm font-medium text-gray-700 mb-1">
               Trim Size
@@ -138,22 +138,6 @@ export default function BookSettingsModal({
               <option value="11">11pt</option>
               <option value="12">12pt</option>
             </select>
-          </div>
-          
-          <div>
-            <label htmlFor="targetPages" className="block text-sm font-medium text-gray-700 mb-1">
-              Target Pages
-            </label>
-            <input
-              type="number"
-              id="targetPages"
-              value={formData.targetPages}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="e.g. 100"
-              min="1"
-              required
-            />
           </div>
         </div>
         

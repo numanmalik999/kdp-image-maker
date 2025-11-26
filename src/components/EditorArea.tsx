@@ -16,13 +16,14 @@ interface EditorAreaProps {
   isGenerating: boolean;
   activeTab: EditorTab;
   onTabChange: (tab: EditorTab) => void;
-  targetPages: number;
+  maxContentPage: number; // New: Max content page number
   bookPrompt: string;
   currentPageNumber: number;
   onPageChange: (newPageNumber: number) => void;
   onSavePageContent: (pageNumber: number, content: string, activityTypes: PageActivityType[]) => Promise<void>;
   onImageUpload: (pageNumber: number, file: File) => Promise<void>;
   onDeletePage: (pageNumber: number) => Promise<void>;
+  onInsertPage: (insertionPoint: number) => Promise<void>; // New
   isSaving: boolean;
   // New Props
   aiConfig: UserAIConfig;
@@ -40,19 +41,20 @@ export default function EditorArea({
   isGenerating,
   activeTab,
   onTabChange,
-  targetPages,
+  maxContentPage,
   bookPrompt,
   currentPageNumber,
   onPageChange,
   onSavePageContent,
   onImageUpload,
   onDeletePage,
+  onInsertPage,
   isSaving,
   aiConfig,
   onOpenAIConfigModal,
 }: EditorAreaProps) {
 
-  // Since Chapters/SingleText are removed, we calculate words based on existing pages content
+  // Calculate words based on existing pages content
   const totalWords = pages.reduce((sum, page) => sum + countWords(page.content), 0);
   const estimatedPages = estimatePages(totalWords, fontSize);
 
@@ -131,14 +133,15 @@ export default function EditorArea({
               onGenerateImage={onGenerateImage}
               onEditImage={onEditImage}
               bookPrompt={bookPrompt}
-              currentPageNumber={isCoverTab ? (activeTab === 'front_cover' ? 0 : targetPages + 1) : currentPageNumber}
+              currentPageNumber={isCoverTab ? (activeTab === 'front_cover' ? 0 : maxContentPage + 1) : currentPageNumber}
               onPageChange={onPageChange}
               onSavePageContent={onSavePageContent}
               onImageUpload={onImageUpload}
               onDeletePage={onDeletePage}
+              onInsertPage={onInsertPage} // Pass new handler
               isSaving={isSaving}
               isCoverPage={isCoverTab}
-              maxPageNumber={targetPages}
+              maxContentPage={maxContentPage} // Pass max content page count
               // New Props
               aiConfig={aiConfig}
               onOpenAIConfigModal={onOpenAIConfigModal}
@@ -155,7 +158,7 @@ export default function EditorArea({
               </span>
             </div>
             <div className="text-xs text-gray-500">
-              Based on {fontSize}pt font
+              Total Content Pages: <span className="font-semibold text-gray-900">{maxContentPage}</span>
             </div>
           </div>
         </div>

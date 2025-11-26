@@ -84,7 +84,7 @@ export default function DashboardContent({ onEditBook, onLogout }: DashboardCont
           title: data.title,
           author: data.author,
           trim_size: data.trimSize,
-          target_pages: 50, // Default pages
+          target_pages: 1, // Start with 1 page, target_pages is now ignored for limits
           font_size: 12, // Default font size
           status: 'draft',
         })

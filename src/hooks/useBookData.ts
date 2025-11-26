@@ -9,7 +9,7 @@ export interface BookData {
   author: string | null;
   trim_size: TrimSize;
   font_size: FontSize;
-  target_pages: number;
+  target_pages: number; // Kept for DB consistency, but ignored for limits
   status: 'draft' | 'generating' | 'complete';
   book_prompt: string | null;
   pages: Page[];
@@ -62,7 +62,7 @@ export default function useBookData(bookId: string | undefined, onBookNotFound: 
       }
 
       // Map raw pages data to the frontend Page interface
-      const mappedPages: Page[] = (bookData.pages as RawPage[] || []).map(rawPage => ({
+      let mappedPages: Page[] = (bookData.pages as RawPage[] || []).map(rawPage => ({
         id: rawPage.id,
         pageNumber: rawPage.page_number,
         content: rawPage.content || '',
@@ -70,6 +70,18 @@ export default function useBookData(bookId: string | undefined, onBookNotFound: 
         // Convert singular DB activity_type string back to an array for the frontend state
         activityTypes: rawPage.activity_type ? [rawPage.activity_type] : ['coloring'],
       }));
+      
+      // If no content pages exist (new book or all deleted), ensure page 1 exists for editing
+      const contentPagesExist = mappedPages.some(p => p.pageNumber > 0);
+      if (!contentPagesExist) {
+        mappedPages.push({
+          id: `temp-1`,
+          pageNumber: 1,
+          content: '',
+          activityTypes: ['coloring'],
+        });
+        mappedPages.sort((a, b) => a.pageNumber - b.pageNumber);
+      }
 
       // Ensure types match the local state structure
       const typedBookData: BookData = {

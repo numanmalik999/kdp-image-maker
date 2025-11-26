@@ -8,7 +8,6 @@ export interface BookSettings {
   author: string;
   trimSize: TrimSize;
   fontSize: FontSize;
-  targetPages: number;
   hasFrontCover: boolean;
   hasBackCover: boolean;
 }

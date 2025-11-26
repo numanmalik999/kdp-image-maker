@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Page, PageActivityType, UserAIConfig } from '../types';
-import { Sparkles, Loader2, Palette, ChevronLeft, ChevronRight, Pencil, Save, Upload, Trash2, Key } from 'lucide-react';
+import { Sparkles, Loader2, Palette, ChevronLeft, ChevronRight, Pencil, Save, Upload, Trash2, Plus, Key } from 'lucide-react';
 
 interface PagesEditorProps {
   pages: Page[];
@@ -14,9 +14,10 @@ interface PagesEditorProps {
   onSavePageContent: (pageNumber: number, content: string, activityTypes: PageActivityType[]) => Promise<void>;
   onImageUpload: (pageNumber: number, file: File) => Promise<void>;
   onDeletePage: (pageNumber: number) => Promise<void>;
+  onInsertPage: (insertionPoint: number) => Promise<void>; // New
   isSaving: boolean;
   isCoverPage: boolean;
-  maxPageNumber: number;
+  maxContentPage: number; // Max content page number (highest pageNumber > 0)
   // New Props
   aiConfig: UserAIConfig;
   onOpenAIConfigModal: () => void;
@@ -43,9 +44,10 @@ export default function PagesEditor({
   onSavePageContent,
   onImageUpload,
   onDeletePage,
+  onInsertPage,
   isSaving,
   isCoverPage,
-  maxPageNumber,
+  maxContentPage,
   aiConfig,
   onOpenAIConfigModal,
 }: PagesEditorProps) {
@@ -185,22 +187,35 @@ export default function PagesEditor({
   };
 
   const handleNext = () => {
-    if (currentPageNumber >= 1 && currentPageNumber < maxPageNumber) {
+    // Navigate to the next content page
+    if (currentPageNumber >= 1 && currentPageNumber < maxContentPage) {
       onPageChange(currentPageNumber + 1);
     }
   };
 
   const handlePrevious = () => {
+    // Navigate to the previous content page
     if (currentPageNumber > 1) {
       onPageChange(currentPageNumber - 1);
     }
+  };
+  
+  const handleAddPage = async () => {
+    // Add page after the last content page (maxContentPage + 1)
+    const newPageNumber = maxContentPage + 1;
+    await onInsertPage(newPageNumber);
+  };
+  
+  const handleInsertPageAtCurrent = async () => {
+    // Insert page at the current page number, shifting subsequent pages
+    await onInsertPage(currentPageNumber);
   };
   
   const pageTitle = isCoverPage 
     ? (currentPageNumber === 0 ? 'Front Cover' : 'Back Cover')
     : `Page ${currentPageNumber}`;
     
-  // totalDisplayPages removed
+  const isFirstContentPage = currentPageNumber === 1;
 
   const renderActivitySelector = () => {
     if (isCoverPage) {
@@ -369,10 +384,22 @@ export default function PagesEditor({
               </button>
             </>
           )}
+          
+          {/* Insert Page Button */}
+          {!isCoverPage && (
+            <button
+              onClick={handleInsertPageAtCurrent}
+              disabled={isSaving || isGenerating}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-4 h-4" />
+              Insert New Page Here
+            </button>
+          )}
 
           <button
             onClick={() => onDeletePage(currentPageNumber)}
-            disabled={isSaving || isGenerating || !existingPage}
+            disabled={isSaving || isGenerating || !existingPage || (isFirstContentPage && maxContentPage === 1)}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Trash2 className="w-4 h-4" />
@@ -391,12 +418,20 @@ export default function PagesEditor({
               <ChevronLeft className="w-4 h-4" />
               Previous Page
             </button>
-            <div className="text-sm text-gray-600">
-              Book Progress: {pages.filter(p => p.pageNumber > 0 && p.pageNumber <= maxPageNumber).length} / {maxPageNumber}
-            </div>
+            
+            <button
+              onClick={handleAddPage}
+              disabled={isSaving || isGenerating}
+              className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              title="Add a new page to the end of the book"
+            >
+              <Plus className="w-4 h-4" />
+              Add Page
+            </button>
+            
             <button
               onClick={handleNext}
-              disabled={currentPageNumber >= maxPageNumber || isGenerating || isSaving}
+              disabled={currentPageNumber >= maxContentPage || isGenerating || isSaving}
               className="flex items-center gap-1 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
             >
               Next Page

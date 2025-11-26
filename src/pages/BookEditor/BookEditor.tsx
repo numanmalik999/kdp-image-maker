@@ -39,6 +39,14 @@ const loadAIConfig = (): UserAIConfig => {
   };
 };
 
+// Helper function to get the highest content page number
+const getMaxContentPageNumber = (currentPages: Page[]): number => {
+    const contentPages = currentPages.filter(p => p.pageNumber > 0);
+    if (contentPages.length === 0) return 0;
+    return Math.max(...contentPages.map(p => p.pageNumber));
+};
+
+
 export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const { bookId } = useParams<{ bookId: string }>();
   
@@ -76,6 +84,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     handleDeletePage,
     handleImageEditComplete,
     handleSaveBookPrompt,
+    handleInsertPage, // New
   } = useBookPersistence({
     bookId: bookId || '',
     book,
@@ -102,22 +111,29 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   
   // Set initial page number after book loads
   useEffect(() => {
-    if (book && book.target_pages > 0) {
-      setCurrentPageNumber(1);
+    if (book) {
+      // Ensure we are on a valid page number (1 or higher if pages exist)
+      const maxPage = getMaxContentPageNumber(pages);
+      // If maxPage is 0 (only covers exist), default to page 1. Otherwise, stay on current page or default to 1.
+      setCurrentPageNumber(prev => {
+        if (prev === 0 || prev === maxPage + 1) {
+          return 1; // If we were on a cover, switch to page 1
+        }
+        return Math.max(1, prev);
+      });
     }
-  }, [book]);
+  }, [book, pages]);
 
   // Handle tab change logic
   const handleTabChange = (tab: EditorTab) => {
     setActiveTab(tab);
-    if (book) {
-      if (tab === 'front_cover') {
-        setCurrentPageNumber(0); // Front cover is page 0
-      } else if (tab === 'back_cover') {
-        setCurrentPageNumber(book.target_pages + 1); // Back cover is page N+1
-      } else if (tab === 'pages') {
-        setCurrentPageNumber(1); // Default to first content page
-      }
+    const maxPage = getMaxContentPageNumber(pages);
+    if (tab === 'front_cover') {
+      setCurrentPageNumber(0); // Front cover is page 0
+    } else if (tab === 'back_cover') {
+      setCurrentPageNumber(maxPage + 1); // Back cover is max content page + 1
+    } else if (tab === 'pages') {
+      setCurrentPageNumber(1); // Default to first content page
     }
   };
 
@@ -142,9 +158,11 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
 
     try {
       // 1. Generate content (primarily for title/structure context)
+      // We use a placeholder targetPages (100) for the AI prompt context, 
+      // as the actual page count is now dynamic.
       const generatedContent = await generateBookContent(
         prompt,
-        book.target_pages,
+        100, // Placeholder for AI context
         book.font_size,
         book.trim_size,
         session.access_token,
@@ -256,6 +274,10 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const handleDeletePageWrapper = async (pageNumber: number) => {
     await handleDeletePage(pageNumber, setCurrentPageNumber, setActiveTab);
   };
+  
+  const handleInsertPageWrapper = async (insertionPoint: number) => {
+    await handleInsertPage(insertionPoint, setCurrentPageNumber);
+  };
 
 
   if (loading) {
@@ -270,12 +292,13 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     return null; // Should be handled by loadBook redirect
   }
 
+  const maxContentPage = getMaxContentPageNumber(pages);
+  
   const currentSettings: BookSettings = {
     title: book.title,
     author: book.author || '',
     trimSize: book.trim_size,
     fontSize: book.font_size,
-    targetPages: book.target_pages,
     hasFrontCover: book.has_front_cover,
     hasBackCover: book.has_back_cover,
   };
@@ -321,13 +344,14 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
             isGenerating={isGeneratingAI}
             activeTab={activeTab}
             onTabChange={handleTabChange}
-            targetPages={book.target_pages}
+            maxContentPage={maxContentPage} // Pass max content page count
             bookPrompt={book.book_prompt || ''}
             currentPageNumber={currentPageNumber}
             onPageChange={setCurrentPageNumber}
             onSavePageContent={handleSavePageContent}
             onImageUpload={handleImageUpload}
             onDeletePage={handleDeletePageWrapper}
+            onInsertPage={handleInsertPageWrapper} // Pass new handler
             isSaving={isSaving}
             // Pass AI Config and Modal Opener down
             aiConfig={aiConfig}

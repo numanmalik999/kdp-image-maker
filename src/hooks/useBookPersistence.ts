@@ -19,6 +19,13 @@ export default function useBookPersistence({
   setPages,
   setIsSaving,
 }: UseBookPersistenceProps) {
+  
+  // Helper function to get the highest content page number
+  const getMaxContentPageNumber = (currentPages: Page[]): number => {
+    const contentPages = currentPages.filter(p => p.pageNumber > 0);
+    if (contentPages.length === 0) return 0;
+    return Math.max(...contentPages.map(p => p.pageNumber));
+  };
 
   const handleSaveSettings = async (newSettings: BookSettings) => {
     if (!bookId) return;
@@ -31,9 +38,9 @@ export default function useBookPersistence({
           author: newSettings.author,
           trim_size: newSettings.trimSize,
           font_size: newSettings.fontSize,
-          target_pages: newSettings.targetPages,
-          has_front_cover: newSettings.hasFrontCover, // Save new field
-          has_back_cover: newSettings.hasBackCover,   // Save new field
+          // target_pages is ignored here as pages are dynamic
+          has_front_cover: newSettings.hasFrontCover,
+          has_back_cover: newSettings.hasBackCover,
         })
         .eq('id', bookId);
 
@@ -60,11 +67,14 @@ export default function useBookPersistence({
     if (!bookId) return;
     setIsSaving(true);
     try {
-      // Find the latest state of the page from the hook's props
-      const existingPage = pages.find(p => p.pageNumber === pageNumber);
+      const maxContentPage = getMaxContentPageNumber(pages);
       
       const isFrontCover = pageNumber === 0;
-      const isBackCover = book && pageNumber === book.target_pages + 1;
+      // Back cover is now defined as maxContentPage + 1 if hasBackCover is true
+      const isBackCover = book?.has_back_cover && pageNumber === maxContentPage + 1;
+      
+      // Find the latest state of the page from the hook's props
+      const existingPage = pages.find(p => p.pageNumber === pageNumber);
       
       // CRITICAL: Get the image URL from the current local state, which was updated by handleImageUpload
       const imageUrlToSave = existingPage?.imageUrl || null; 
@@ -131,26 +141,99 @@ export default function useBookPersistence({
     }
   };
 
+  const handleInsertPage = async (insertionPoint: number, setCurrentPageNumber: React.Dispatch<React.SetStateAction<number>>) => {
+    if (!bookId) return;
+    setIsSaving(true);
+    try {
+      // 1. Shift pages in the database (increment page_number by 1)
+      const { error: shiftError } = await supabase.rpc('shift_book_pages', {
+        book_id_param: bookId,
+        start_page_param: insertionPoint,
+      });
+      
+      if (shiftError) {
+        throw shiftError;
+      }
+      
+      // 2. Insert the new page at the insertion point
+      const { data: newPageData, error: insertError } = await supabase
+        .from('book_pages')
+        .insert({
+          book_id: bookId,
+          page_number: insertionPoint,
+          content: '',
+          activity_type: 'coloring',
+          image_url: null,
+        })
+        .select()
+        .single();
+        
+      if (insertError) throw insertError;
+
+      // 3. Update local state
+      const newPage: Page = {
+        id: newPageData.id,
+        pageNumber: insertionPoint,
+        content: '',
+        imageUrl: undefined,
+        activityTypes: ['coloring'],
+      };
+      
+      // Update existing pages locally by shifting them
+      const shiftedPages = pages.map(p => 
+        p.pageNumber >= insertionPoint && p.pageNumber > 0 ? { ...p, pageNumber: p.pageNumber + 1 } : p
+      );
+      
+      setPages([...shiftedPages, newPage].sort((a, b) => a.pageNumber - b.pageNumber));
+      setCurrentPageNumber(insertionPoint);
+
+      alert(`Page inserted successfully at position ${insertionPoint}!`);
+    } catch (error: any) {
+      console.error('Error inserting page:', error);
+      alert(`Failed to insert page: ${error.message}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleDeletePage = async (pageNumber: number, setCurrentPageNumber: React.Dispatch<React.SetStateAction<number>>, setActiveTab: React.Dispatch<React.SetStateAction<EditorTab>>) => {
     if (!bookId) return;
     
+    const maxContentPage = getMaxContentPageNumber(pages);
     const isFrontCover = pageNumber === 0;
-    const isBackCover = book && pageNumber === book.target_pages + 1;
+    const isBackCover = book?.has_back_cover && pageNumber === maxContentPage + 1;
     
-    if (!confirm(`Are you sure you want to delete page ${pageNumber}?`)) return;
+    if (!confirm(`Are you sure you want to delete page ${pageNumber}? This cannot be undone.`)) return;
 
     setIsSaving(true);
     try {
-      const { error } = await supabase
+      // 1. Delete the page
+      const { error: deleteError } = await supabase
         .from('book_pages')
         .delete()
         .eq('book_id', bookId)
         .eq('page_number', pageNumber);
 
-      if (error) throw error;
+      if (deleteError) throw deleteError;
+      
+      // 2. Shift subsequent pages down (pageNumber > pageNumber)
+      if (pageNumber > 0 && pageNumber <= maxContentPage) {
+        const { error: shiftError } = await supabase.rpc('unshift_book_pages', {
+          book_id_param: bookId,
+          start_page_param: pageNumber,
+        });
+        if (shiftError) throw shiftError;
+      }
 
-      // Update local state
-      setPages(prev => prev.filter(p => p.pageNumber !== pageNumber));
+      // 3. Update local state
+      let newPages = pages.filter(p => p.pageNumber !== pageNumber);
+      
+      // Shift pages locally
+      newPages = newPages.map(p => 
+        p.pageNumber > pageNumber && p.pageNumber > 0 ? { ...p, pageNumber: p.pageNumber - 1 } : p
+      );
+      
+      setPages(newPages.sort((a, b) => a.pageNumber - b.pageNumber));
       
       // If we deleted the current page, move to the previous one (or 1)
       setCurrentPageNumber(prev => Math.max(1, prev - 1));
@@ -335,5 +418,6 @@ export default function useBookPersistence({
     handleDeletePage,
     handleImageEditComplete,
     handleSaveBookPrompt,
+    handleInsertPage, // Export new function
   };
 }
