@@ -138,8 +138,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       return;
     }
 
-    // Removed credit check logic
-
     try {
       // 1. Generate content (primarily for title/structure context)
       const generatedContent = await generateBookContent(
@@ -157,8 +155,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       
       // 3. Update book title locally (since handleSaveBookPrompt doesn't update title)
       setBook(prev => prev ? { ...prev, title: generatedContent.title } : null);
-
-      // Removed credit decrement logic
 
       alert('Book content generated successfully! Now use the Pages tab to generate individual pages.');
     } catch (error: any) {
@@ -283,10 +279,9 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Sidebar removed */}
+    <div className="flex h-screen"> {/* Removed overflow-hidden */}
       
-      <div className="flex-1 flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-4">
             <button
