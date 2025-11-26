@@ -32,11 +32,21 @@ export default function useBookPersistence({
           trim_size: newSettings.trimSize,
           font_size: newSettings.fontSize,
           target_pages: newSettings.targetPages,
+          has_front_cover: newSettings.hasFrontCover, // Save new field
+          has_back_cover: newSettings.hasBackCover,   // Save new field
         })
         .eq('id', bookId);
 
       if (error) throw error;
-      setBook((prev: BookData | null) => prev ? { ...prev, ...newSettings } : null);
+      
+      // Update local state with all new settings
+      setBook((prev: BookData | null) => prev ? { 
+        ...prev, 
+        ...newSettings,
+        has_front_cover: newSettings.hasFrontCover,
+        has_back_cover: newSettings.hasBackCover,
+      } : null);
+      
       alert('Settings saved successfully!');
     } catch (error: any) {
       console.error('Error saving settings:', error);

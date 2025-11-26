@@ -9,6 +9,8 @@ export interface BookSettings {
   trimSize: TrimSize;
   fontSize: FontSize;
   targetPages: number;
+  hasFrontCover: boolean;
+  hasBackCover: boolean;
 }
 
 export interface Chapter {

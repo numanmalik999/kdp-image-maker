@@ -22,10 +22,19 @@ export default function BookSettingsModal({ isOpen, onClose, settings, onSave, i
   if (!isOpen) return null;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { id, value } = e.target;
+    const target = e.target;
+    const id = target.id;
+    const value = target.value;
+    
+    // Determine if it's a checkbox and get its checked state safely
+    const isCheckbox = target instanceof HTMLInputElement && target.type === 'checkbox';
+    const checked = isCheckbox ? target.checked : false;
+
     setFormData(prev => ({
       ...prev,
-      [id]: id === 'targetPages' || id === 'fontSize' ? parseInt(value) || 0 : value,
+      [id]: isCheckbox
+        ? checked 
+        : (id === 'targetPages' || id === 'fontSize' ? parseInt(value) || 0 : value),
     }));
   };
 
@@ -134,6 +143,30 @@ export default function BookSettingsModal({ isOpen, onClose, settings, onSave, i
                     required
                   />
                 </div>
+              </div>
+              
+              {/* New Cover Checkboxes */}
+              <div className="grid grid-cols-2 gap-4 pt-4">
+                <label htmlFor="hasFrontCover" className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="checkbox"
+                    id="hasFrontCover"
+                    checked={formData.hasFrontCover}
+                    onChange={handleChange}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Include Front Cover
+                </label>
+                <label htmlFor="hasBackCover" className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <input
+                    type="checkbox"
+                    id="hasBackCover"
+                    checked={formData.hasBackCover}
+                    onChange={handleChange}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Include Back Cover
+                </label>
               </div>
               
               <div className="flex justify-end pt-2">

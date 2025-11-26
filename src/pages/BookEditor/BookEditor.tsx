@@ -246,6 +246,8 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     trimSize: book.trim_size,
     fontSize: book.font_size,
     targetPages: book.target_pages,
+    hasFrontCover: book.has_front_cover,
+    hasBackCover: book.has_back_cover,
   };
 
   return (
