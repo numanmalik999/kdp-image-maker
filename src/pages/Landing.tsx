@@ -1,12 +1,15 @@
-import { BookOpen, Download, Zap, Brain, FileText } from 'lucide-react';
+import { BookOpen, Download, Zap, Brain, FileText, LayoutDashboard, LogOut } from 'lucide-react';
 
 interface LandingProps {
   onGetStarted: () => void;
   onSignIn: () => void;
   onSignUp: () => void;
+  onGoToDashboard: () => void;
+  onLogout: () => void;
+  user: { email: string } | null;
 }
 
-export default function Landing({ onGetStarted, onSignIn, onSignUp }: LandingProps) {
+export default function Landing({ onGetStarted, onSignIn, onSignUp, onGoToDashboard, onLogout, user }: LandingProps) {
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-10">
@@ -16,18 +19,42 @@ export default function Landing({ onGetStarted, onSignIn, onSignUp }: LandingPro
             <span className="text-2xl font-bold text-gray-900">KDP Book Builder</span>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={onSignIn}
-              className="px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
-            >
-              Sign In
-            </button>
-            <button
-              onClick={onSignUp}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              Sign Up
-            </button>
+            {user ? (
+              <>
+                <span className="text-sm text-gray-600 hidden sm:inline">
+                  Welcome, {user.email}
+                </span>
+                <button
+                  onClick={onGoToDashboard}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  <LayoutDashboard className="w-4 h-4" />
+                  Dashboard
+                </button>
+                <button
+                  onClick={onLogout}
+                  className="p-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                  title="Logout"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={onSignIn}
+                  className="px-4 py-2 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={onSignUp}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Sign Up
+                </button>
+              </>
+            )}
           </div>
         </div>
       </nav>
