@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Save, Sparkles, Info, Loader2 } from 'lucide-react';
+import { X, Save, Info } from 'lucide-react';
 import { BookSettings } from '../types';
 
 interface BookSettingsModalProps {
@@ -8,23 +8,16 @@ interface BookSettingsModalProps {
   settings: BookSettings;
   onSave: (newSettings: BookSettings) => Promise<void>;
   isSaving: boolean;
-  // New props for AI/Sample
-  onInsertSample: () => void;
-  onAIGenerate: (prompt: string) => void;
-  isGeneratingAI: boolean;
-  bookPrompt: string;
 }
 
-export default function BookSettingsModal({ isOpen, onClose, settings, onSave, isSaving, onInsertSample, onAIGenerate, isGeneratingAI, bookPrompt }: BookSettingsModalProps) {
+export default function BookSettingsModal({ isOpen, onClose, settings, onSave, isSaving }: BookSettingsModalProps) {
   const [formData, setFormData] = useState<BookSettings>(settings);
-  const [aiPrompt, setAiPrompt] = useState(bookPrompt); // Local state for AI prompt
 
   useEffect(() => {
     if (isOpen) {
       setFormData(settings);
-      setAiPrompt(bookPrompt);
     }
-  }, [isOpen, settings, bookPrompt]);
+  }, [isOpen, settings]);
 
   if (!isOpen) return null;
 
@@ -44,18 +37,12 @@ export default function BookSettingsModal({ isOpen, onClose, settings, onSave, i
     }
     await onSave(formData);
   };
-  
-  const handleAIGenerate = () => {
-    if (aiPrompt.trim()) {
-      onAIGenerate(aiPrompt);
-    }
-  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-xl font-bold text-gray-900">Book Settings & AI Tools</h2>
+          <h2 className="text-xl font-bold text-gray-900">Book Settings</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -157,52 +144,6 @@ export default function BookSettingsModal({ isOpen, onClose, settings, onSave, i
                 >
                   <Save className="w-4 h-4" />
                   {isSaving ? 'Saving...' : 'Save Settings'}
-                </button>
-              </div>
-            </div>
-            
-            {/* --- AI Content Generator --- */}
-            <div className="space-y-4 border p-4 rounded-lg bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="w-5 h-5 text-purple-600" />
-                <h3 className="text-lg font-semibold text-purple-900">AI Content Generator</h3>
-              </div>
-              
-              <textarea
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                className="w-full px-3 py-2 border border-purple-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-sm"
-                rows={3}
-                placeholder="Describe your book in simple words... e.g. 'A children's story about a brave puppy who saves his town'"
-                disabled={isGeneratingAI}
-              />
-              
-              <div className="flex gap-3">
-                <button
-                  onClick={handleAIGenerate}
-                  type="button"
-                  disabled={isGeneratingAI || !aiPrompt.trim()}
-                  className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isGeneratingAI ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      Generate Full Book Content
-                    </>
-                  )}
-                </button>
-                
-                <button
-                  onClick={onInsertSample}
-                  type="button"
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
-                >
-                  Insert Sample Story
                 </button>
               </div>
             </div>

@@ -5,10 +5,14 @@ import EditorArea from '../../components/EditorArea';
 import BookSettingsModal from '../../components/BookSettingsModal';
 import ExportModal from '../../components/ExportModal';
 import ImageEditorModal from '../../components/ImageEditorModal';
+import Sidebar from '../../components/Sidebar';
 import { BookSettings, Page, EditorTab } from '../../types';
 import { generatePDF } from '../../utils/pdfGenerator';
 import { generateEPUB } from '../../utils/epubGenerator';
 import { SUPABASE_URL } from '../../lib/config';
+import { generateBookContent } from '../../utils/aiGeneration';
+import { checkAICredits, decrementAICredits } from '../../utils/subscriptionLimits';
+import { supabase } from '../../lib/supabase';
 
 // Import new hooks
 import useBookData from '../../hooks/useBookData';
@@ -28,7 +32,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   // Modal states
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [isImageEditorModalOpen, setIsImageEditorModalOpen] = useState(false);
+  const [isImageEditorModalOpen, setIsImageEditorModal] = useState(false);
   const [imageToEdit, setImageToEdit] = useState<{ src: string; pageNumber: number } | null>(null);
 
   // --- Hooks ---
@@ -40,6 +44,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     handleImageUpload,
     handleDeletePage,
     handleImageEditComplete,
+    handleSaveBookPrompt,
   } = useBookPersistence({
     bookId: bookId || '',
     book,
@@ -84,6 +89,67 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     }
   };
 
+  // --- AI Content Handlers (Full Book) ---
+  
+  const handleAIGenerateBook = async (prompt: string) => {
+    if (!book || !bookId) return;
+    setIsGeneratingAI(true);
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      alert('Please log in to use AI generation.');
+      setIsGeneratingAI(false);
+      return;
+    }
+
+    const creditCheck = await checkAICredits(session.user.id);
+    if (!creditCheck.allowed) {
+      alert(creditCheck.message);
+      setIsGeneratingAI(false);
+      return;
+    }
+
+    try {
+      // 1. Generate content (primarily for title/structure context)
+      const generatedContent = await generateBookContent(
+        prompt,
+        book.target_pages,
+        book.font_size,
+        book.trim_size,
+        session.access_token
+      );
+
+      // 2. Update book prompt and title in DB
+      await handleSaveBookPrompt(prompt);
+      
+      // 3. Update book title locally (since handleSaveBookPrompt doesn't update title)
+      setBook(prev => prev ? { ...prev, title: generatedContent.title } : null);
+
+      // 4. Decrement credits
+      await decrementAICredits(session.user.id);
+
+      alert('Book content generated successfully! Now use the Pages tab to generate individual pages.');
+    } catch (error: any) {
+      console.error('AI Generation Error:', error);
+      alert(`AI Generation Failed: ${error.message}`);
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+  
+  const handleInsertSample = () => {
+    if (!book) return;
+    const samplePrompt = "A children's story about a brave puppy who saves his town";
+    
+    // 1. Save sample prompt to DB
+    handleSaveBookPrompt(samplePrompt);
+    
+    // 2. Update book title locally
+    setBook(prev => prev ? { ...prev, title: 'The Magic Garden (Sample)', book_prompt: samplePrompt } : null);
+    
+    alert('Sample prompt inserted. Now go to the Pages tab and click "Generate Page" to create content based on the sample story.');
+  };
+  
   // --- Content Handlers ---
 
   const handlePagesChange = (newPages: Page[]) => {
@@ -140,7 +206,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       // Proxy the image URL through the edge function to avoid CORS issues during canvas manipulation
       const proxiedUrl = `${SUPABASE_URL}/functions/v1/proxy-image?url=${encodeURIComponent(page.imageUrl)}`;
       setImageToEdit({ src: proxiedUrl, pageNumber });
-      setIsImageEditorModalOpen(true);
+      setIsImageEditorModal(true);
     } else {
       alert('No image found for this page to edit.');
     }
@@ -153,7 +219,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       editedImageBlob, 
       imageToEdit.pageNumber, 
       setImageToEdit, 
-      setIsImageEditorModalOpen
+      setIsImageEditorModal
     );
   };
   
@@ -183,53 +249,63 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   };
 
   return (
-    <div className="flex flex-col h-screen">
-      <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between flex-shrink-0">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors font-medium"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Dashboard
-          </button>
-          <h1 className="text-xl font-bold text-gray-900 truncate max-w-xs">
-            {book.title}
-          </h1>
-          <span className="text-sm text-gray-500">({book.trim_size})</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setIsSettingsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
-          >
-            <Settings className="w-4 h-4" />
-            Settings
-          </button>
-        </div>
-      </header>
+    <div className="flex h-screen overflow-hidden">
+      <Sidebar
+        bookPrompt={book.book_prompt || ''}
+        onAIGenerate={handleAIGenerateBook}
+        isGeneratingAI={isGeneratingAI}
+        onInsertSample={handleInsertSample}
+        onUpdateBookPrompt={handleSaveBookPrompt}
+      />
+      
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors font-medium"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back to Dashboard
+            </button>
+            <h1 className="text-xl font-bold text-gray-900 truncate max-w-xs">
+              {book.title}
+            </h1>
+            <span className="text-sm text-gray-500">({book.trim_size})</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsSettingsModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+            >
+              <Settings className="w-4 h-4" />
+              Settings
+            </button>
+          </div>
+        </header>
 
-      <div className="flex-1 overflow-y-auto">
-        <EditorArea
-          pages={pages}
-          onPagesChange={handlePagesChange}
-          onGeneratePage={handleGeneratePage}
-          onGenerateImage={handleGenerateImage}
-          onEditImage={handleEditImage}
-          fontSize={book.font_size}
-          onGeneratePDF={handleGeneratePDF}
-          isGenerating={isGeneratingAI}
-          activeTab={activeTab}
-          onTabChange={handleTabChange}
-          targetPages={book.target_pages}
-          bookPrompt={book.book_prompt || ''}
-          currentPageNumber={currentPageNumber}
-          onPageChange={setCurrentPageNumber}
-          onSavePageContent={handleSavePageContent}
-          onImageUpload={handleImageUpload}
-          onDeletePage={handleDeletePageWrapper}
-          isSaving={isSaving}
-        />
+        <div className="flex-1 overflow-y-auto">
+          <EditorArea
+            pages={pages}
+            onPagesChange={handlePagesChange}
+            onGeneratePage={handleGeneratePage}
+            onGenerateImage={handleGenerateImage}
+            onEditImage={handleEditImage}
+            fontSize={book.font_size}
+            onGeneratePDF={handleGeneratePDF}
+            isGenerating={isGeneratingAI}
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
+            targetPages={book.target_pages}
+            bookPrompt={book.book_prompt || ''}
+            currentPageNumber={currentPageNumber}
+            onPageChange={setCurrentPageNumber}
+            onSavePageContent={handleSavePageContent}
+            onImageUpload={handleImageUpload}
+            onDeletePage={handleDeletePageWrapper}
+            isSaving={isSaving}
+          />
+        </div>
       </div>
 
       <BookSettingsModal
@@ -238,10 +314,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
         settings={currentSettings}
         onSave={handleSaveSettings}
         isSaving={isSaving}
-        onInsertSample={() => alert('Sample insertion removed. Use AI generation or manual input.')}
-        onAIGenerate={() => alert('Full book AI generation removed. Use page-level generation.')}
-        isGeneratingAI={isGeneratingAI}
-        bookPrompt={book.book_prompt || ''}
       />
 
       <ExportModal
@@ -256,7 +328,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       {isImageEditorModalOpen && imageToEdit && (
         <ImageEditorModal
           isOpen={isImageEditorModalOpen}
-          onClose={() => setIsImageEditorModalOpen(false)}
+          onClose={() => setIsImageEditorModal(false)}
           src={imageToEdit.src}
           onEditComplete={handleImageEditCompleteWrapper}
           isProcessing={isSaving}

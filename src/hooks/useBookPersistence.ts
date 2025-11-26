@@ -196,7 +196,20 @@ export default function useBookPersistence({
       const currentPageState = pages.find(p => p.pageNumber === pageNumber);
       const activityTypes = currentPageState?.activityTypes || ['image'];
       
-      // 3. Update local state with the new image URL
+      // 3. Update the page in the database immediately (CRITICAL for persistence)
+      const { error: dbError } = await supabase
+        .from('book_pages')
+        .upsert({
+          book_id: bookId,
+          page_number: pageNumber,
+          image_url: newImageUrl,
+          content: currentPageState?.content || '',
+          activity_type: activityTypes[0] || 'image',
+        }, { onConflict: 'book_id, page_number' });
+
+      if (dbError) throw dbError;
+
+      // 4. Update local state with the new image URL
       setPages(prev => {
         const index = prev.findIndex(p => p.pageNumber === pageNumber);
         const newPage: Page = {
@@ -216,8 +229,7 @@ export default function useBookPersistence({
         }
       });
       
-      // 4. Alert user to click the Save Page button
-      alert('Image uploaded successfully! Click "Save Page" to persist changes.');
+      alert('Image uploaded and saved successfully!');
 
     } catch (error: any) {
       console.error('Image Upload Error:', error);
@@ -280,6 +292,25 @@ export default function useBookPersistence({
       setIsSaving(false);
     }
   };
+  
+  const handleSaveBookPrompt = async (prompt: string) => {
+    if (!bookId) return;
+    setIsSaving(true);
+    try {
+      const { error } = await supabase
+        .from('books')
+        .update({ book_prompt: prompt })
+        .eq('id', bookId);
+
+      if (error) throw error;
+      setBook((prev: BookData | null) => prev ? { ...prev, book_prompt: prompt } : null);
+    } catch (error: any) {
+      console.error('Error saving book prompt:', error);
+      // Do not alert user on simple prompt typing save failure, just log
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return {
     handleSaveSettings,
@@ -287,5 +318,6 @@ export default function useBookPersistence({
     handleImageUpload,
     handleDeletePage,
     handleImageEditComplete,
+    handleSaveBookPrompt,
   };
 }
