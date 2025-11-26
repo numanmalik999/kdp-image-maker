@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Plus, BookOpen, Loader2, User, CheckCircle, Clock, LogOut } from 'lucide-react';
+import { Plus, BookOpen, Loader2, User, CheckCircle, Clock, LogOut, Shield } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import BookCard from '../../components/BookCard';
 import NewBookModal from '../../components/NewBookModal';
 import { TrimSize } from '../../types';
+import { useNavigate } from 'react-router-dom';
 
 interface Book {
   id: string;
@@ -30,6 +31,7 @@ interface DashboardContentProps {
 type BookFilter = 'all' | 'in_progress' | 'completed';
 
 export default function DashboardContent({ onEditBook, onLogout }: DashboardContentProps) {
+  const navigate = useNavigate();
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -157,6 +159,16 @@ export default function DashboardContent({ onEditBook, onLogout }: DashboardCont
           </h1>
           
           <div className="flex items-center gap-4">
+            {userProfile && userProfile.role === 'admin' && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium shadow-md"
+              >
+                <Shield className="w-4 h-4" />
+                Admin Panel
+              </button>
+            )}
+            
             {userProfile && (
               <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex items-center gap-3">
                 <User className="w-6 h-6 text-blue-600" />
