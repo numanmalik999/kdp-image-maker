@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Page, PageActivityType } from '../types';
-import { Sparkles, Loader2, Palette, ChevronLeft, ChevronRight, Pencil, Save, Upload, Trash2 } from 'lucide-react';
+import { Page, PageActivityType, UserAIConfig } from '../types';
+import { Sparkles, Loader2, Palette, ChevronLeft, ChevronRight, Pencil, Save, Upload, Trash2, Key } from 'lucide-react';
 
 interface PagesEditorProps {
   pages: Page[];
@@ -17,6 +17,9 @@ interface PagesEditorProps {
   isSaving: boolean;
   isCoverPage: boolean;
   maxPageNumber: number;
+  // New Props
+  aiConfig: UserAIConfig;
+  onOpenAIConfigModal: () => void;
 }
 
 const ACTIVITY_OPTIONS: { value: PageActivityType; label: string }[] = [
@@ -43,6 +46,8 @@ export default function PagesEditor({
   isSaving,
   isCoverPage,
   maxPageNumber,
+  aiConfig,
+  onOpenAIConfigModal,
 }: PagesEditorProps) {
   
   const existingPage = pages.find(p => p.pageNumber === currentPageNumber);
@@ -106,6 +111,21 @@ export default function PagesEditor({
     const prompt = pagePrompt.trim() || bookPrompt.trim();
     if (!prompt) {
       alert('Please enter a prompt or set a book description in the settings modal.');
+      return;
+    }
+    
+    // Check if API keys are configured before generating
+    const isTextGeneration = hasTextActivity;
+    const isImageGeneration = hasImageActivity;
+    
+    if (isTextGeneration && !aiConfig.openAIApiKey && !aiConfig.geminiApiKey) {
+      alert('Please configure your OpenAI or Gemini API Key to generate text content.');
+      onOpenAIConfigModal();
+      return;
+    }
+    if (isImageGeneration && !aiConfig.openAIApiKey) {
+      alert('Please configure your OpenAI API Key to generate images (DALL-E 3).');
+      onOpenAIConfigModal();
       return;
     }
 
@@ -306,6 +326,15 @@ export default function PagesEditor({
               Generate {pageTitle}
             </>
           )}
+        </button>
+        
+        {/* Quick AI Config Button */}
+        <button
+          onClick={onOpenAIConfigModal}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium mb-4"
+        >
+          <Key className="w-4 h-4" />
+          Configure AI Keys
         </button>
         
         {/* Manual Actions */}

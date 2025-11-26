@@ -5,6 +5,7 @@ import EditorArea from '../../components/EditorArea';
 import BookSettingsModal from '../../components/BookSettingsModal';
 import ExportModal from '../../components/ExportModal';
 import ImageEditorModal from '../../components/ImageEditorModal';
+import AIConfigModal from '../../components/AIConfigModal'; // Import new modal
 import { BookSettings, Page, EditorTab, UserAIConfig } from '../../types';
 import { generatePDF } from '../../utils/pdfGenerator';
 import { generateEPUB } from '../../utils/epubGenerator';
@@ -62,6 +63,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isImageEditorModalOpen, setIsImageEditorModal] = useState(false);
+  const [isAIConfigModalOpen, setIsAIConfigModalOpen] = useState(false); // New state
   const [imageToEdit, setImageToEdit] = useState<{ src: string; pageNumber: number } | null>(null);
 
   // --- Hooks ---
@@ -327,6 +329,9 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
             onImageUpload={handleImageUpload}
             onDeletePage={handleDeletePageWrapper}
             isSaving={isSaving}
+            // Pass AI Config and Modal Opener down
+            aiConfig={aiConfig}
+            onOpenAIConfigModal={() => setIsAIConfigModalOpen(true)}
           />
         </div>
       </div>
@@ -364,6 +369,15 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
           src={imageToEdit.src}
           onEditComplete={handleImageEditCompleteWrapper}
           isProcessing={isSaving}
+        />
+      )}
+      
+      {isAIConfigModalOpen && (
+        <AIConfigModal
+          isOpen={isAIConfigModalOpen}
+          onClose={() => setIsAIConfigModalOpen(false)}
+          aiConfig={aiConfig}
+          onUpdateAIConfig={updateAIConfig}
         />
       )}
     </div>

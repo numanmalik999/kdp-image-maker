@@ -1,5 +1,5 @@
-import { Page, PageActivityType } from '../types';
-import { Download, FileStack, BookOpenCheck, BookOpenText } from 'lucide-react';
+import { Page, PageActivityType, UserAIConfig } from '../types';
+import { Download, FileStack, BookOpenCheck, BookOpenText, Key } from 'lucide-react';
 import PagesEditor from './PagesEditor';
 import { countWords, estimatePages } from '../utils/textUtils';
 
@@ -24,6 +24,9 @@ interface EditorAreaProps {
   onImageUpload: (pageNumber: number, file: File) => Promise<void>;
   onDeletePage: (pageNumber: number) => Promise<void>;
   isSaving: boolean;
+  // New Props
+  aiConfig: UserAIConfig;
+  onOpenAIConfigModal: () => void;
 }
 
 export default function EditorArea({
@@ -45,6 +48,8 @@ export default function EditorArea({
   onImageUpload,
   onDeletePage,
   isSaving,
+  aiConfig,
+  onOpenAIConfigModal,
 }: EditorAreaProps) {
 
   // Since Chapters/SingleText are removed, we calculate words based on existing pages content
@@ -94,7 +99,15 @@ export default function EditorArea({
           </div>
           
           <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-            {/* Removed Save All Content button */}
+            {/* Added quick access button for AI Config */}
+            <button
+              onClick={onOpenAIConfigModal}
+              className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors font-medium"
+              title="Configure AI API Keys"
+            >
+              <Key className="w-4 h-4" />
+              AI Config
+            </button>
             
             <button
               onClick={onGeneratePDF}
@@ -126,6 +139,9 @@ export default function EditorArea({
               isSaving={isSaving}
               isCoverPage={isCoverTab}
               maxPageNumber={targetPages}
+              // New Props
+              aiConfig={aiConfig}
+              onOpenAIConfigModal={onOpenAIConfigModal}
             />
           </div>
 
