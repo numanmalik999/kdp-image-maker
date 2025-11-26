@@ -24,6 +24,11 @@ export default function Dashboard({ onEditBook }: DashboardProps) {
     };
     checkAuth();
   }, [navigate]);
+  
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/login');
+  };
 
   if (loading) {
     return (
@@ -36,6 +41,7 @@ export default function Dashboard({ onEditBook }: DashboardProps) {
   return (
     <DashboardContent
       onEditBook={onEditBook}
+      onLogout={handleLogout}
       // Removed onViewPricing and onManageBilling
     />
   );

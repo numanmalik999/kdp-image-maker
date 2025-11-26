@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, BookOpen, Loader2, User, CheckCircle, Clock } from 'lucide-react';
+import { Plus, BookOpen, Loader2, User, CheckCircle, Clock, LogOut } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import BookCard from '../../components/BookCard';
 import NewBookModal from '../../components/NewBookModal';
@@ -24,11 +24,12 @@ interface UserProfile {
 
 interface DashboardContentProps {
   onEditBook: (bookId: string) => void;
+  onLogout: () => void;
 }
 
 type BookFilter = 'all' | 'in_progress' | 'completed';
 
-export default function DashboardContent({ onEditBook }: DashboardContentProps) {
+export default function DashboardContent({ onEditBook, onLogout }: DashboardContentProps) {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -155,20 +156,30 @@ export default function DashboardContent({ onEditBook }: DashboardContentProps) 
             My Books
           </h1>
           
-          {userProfile && (
-            <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex items-center gap-3">
-              <User className="w-6 h-6 text-blue-600" />
-              <div>
-                <p className="font-semibold text-gray-900">{userProfile.full_name || 'User'}</p>
-                <p className="text-sm text-gray-600">{userProfile.email}</p>
-                <p className={`text-xs font-medium mt-1 px-2 py-0.5 rounded-full ${
-                  userProfile.role === 'admin' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1)}
-                </p>
+          <div className="flex items-center gap-4">
+            {userProfile && (
+              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex items-center gap-3">
+                <User className="w-6 h-6 text-blue-600" />
+                <div>
+                  <p className="font-semibold text-gray-900">{userProfile.full_name || 'User'}</p>
+                  <p className="text-sm text-gray-600">{userProfile.email}</p>
+                  <p className={`text-xs font-medium mt-1 px-2 py-0.5 rounded-full ${
+                    userProfile.role === 'admin' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {userProfile.role.charAt(0).toUpperCase() + userProfile.role.slice(1)}
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+            
+            <button
+              onClick={onLogout}
+              className="p-3 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors border border-red-200"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </div>
         </div>
         
         {/* Controls and Tabs */}
