@@ -5,7 +5,6 @@ import EditorArea from '../../components/EditorArea';
 import BookSettingsModal from '../../components/BookSettingsModal';
 import ExportModal from '../../components/ExportModal';
 import ImageEditorModal from '../../components/ImageEditorModal';
-import Sidebar from '../../components/Sidebar';
 import { BookSettings, Page, EditorTab } from '../../types';
 import { generatePDF } from '../../utils/pdfGenerator';
 import { generateEPUB } from '../../utils/epubGenerator';
@@ -252,13 +251,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar
-        bookPrompt={book.book_prompt || ''}
-        onAIGenerate={handleAIGenerateBook}
-        isGeneratingAI={isGeneratingAI}
-        onInsertSample={handleInsertSample}
-        onUpdateBookPrompt={handleSaveBookPrompt}
-      />
+      {/* Sidebar removed */}
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between flex-shrink-0">
@@ -316,6 +309,12 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
         settings={currentSettings}
         onSave={handleSaveSettings}
         isSaving={isSaving}
+        // Pass AI props to the modal
+        bookPrompt={book.book_prompt || ''}
+        onAIGenerate={handleAIGenerateBook}
+        isGeneratingAI={isGeneratingAI}
+        onInsertSample={handleInsertSample}
+        onUpdateBookPrompt={handleSaveBookPrompt}
       />
 
       <ExportModal
