@@ -1,4 +1,4 @@
-import { PageActivityType } from '../types';
+import { PageActivityType, TextModel, ImageModel } from '../types';
 import { SUPABASE_URL } from '../lib/config';
 
 export interface GeneratedContent {
@@ -14,7 +14,9 @@ export async function generateBookContent(
   targetPages: number,
   fontSize: number,
   trimSize: string,
-  token: string
+  token: string,
+  apiKey: string, // New: User's API Key
+  model: TextModel // New: User's selected model
 ): Promise<GeneratedContent> {
   const apiUrl = `${SUPABASE_URL}/functions/v1/generate-book-content`;
   const res = await fetch(apiUrl, {
@@ -23,7 +25,7 @@ export async function generateBookContent(
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ prompt, targetPages, fontSize, trimSize }),
+    body: JSON.stringify({ prompt, targetPages, fontSize, trimSize, apiKey, model }),
   });
 
   if (!res.ok) {
@@ -48,6 +50,8 @@ export async function generatePageContent(
   totalPages: number,
   fontSize: number,
   token: string,
+  apiKey: string, // New: User's API Key
+  model: TextModel, // New: User's selected model
   bookContext?: string,
   activityTypes?: PageActivityType[]
 ): Promise<string> {
@@ -65,6 +69,8 @@ export async function generatePageContent(
       fontSize,
       bookContext,
       activityTypes,
+      apiKey, // Pass API Key
+      model, // Pass Model
     }),
   });
 
@@ -79,19 +85,14 @@ export async function generatePageContent(
 
 export async function generateColoringImage(
   prompt: string,
-  model: string = 'DALL-E 3',
+  token: string,
+  apiKey: string, // New: User's API Key
+  model: ImageModel, // New: User's selected model
   bookId?: string,
-  token?: string,
   activityTypes?: PageActivityType[],
   tracingWord?: string
 ): Promise<string> {
   const apiUrl = `${SUPABASE_URL}/functions/v1/generate-coloring-image`;
-
-  const tracingNote = tracingWord && tracingWord.trim()
-    ? ` Include the tracing word '${tracingWord}' in large bold letters at the bottom of the image for tracing practice.`
-    : '';
-
-  const enhancedPrompt = `A coloring image. Subject: ${prompt}.` + tracingNote;
 
   const res = await fetch(apiUrl, {
     method: 'POST',
@@ -100,11 +101,12 @@ export async function generateColoringImage(
       'Authorization': `Bearer ${token || ''}`,
     },
     body: JSON.stringify({
-      prompt: enhancedPrompt,
+      prompt,
       model,
       bookId,
       activityTypes,
       tracingWord,
+      apiKey, // Pass API Key
     }),
   });
 

@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { BookData } from './useBookData';
-import { Page } from '../types';
+import { Page, UserAIConfig } from '../types';
 import { checkAICredits, decrementAICredits, incrementPageCount, incrementImageCount, checkPageCreationLimit } from '../utils/subscriptionLimits';
 import { generatePageContent, generateColoringImage } from '../utils/aiGeneration';
 
@@ -11,6 +11,7 @@ interface UseBookGenerationProps {
   setBook: React.Dispatch<React.SetStateAction<BookData | null>>;
   setPages: React.Dispatch<React.SetStateAction<Page[]>>;
   setIsGeneratingAI: React.Dispatch<React.SetStateAction<boolean>>;
+  aiConfig: UserAIConfig; // New: User's AI configuration
 }
 
 export default function useBookGeneration({
@@ -18,9 +19,8 @@ export default function useBookGeneration({
   book,
   pages,
   setPages,
+  aiConfig,
 }: UseBookGenerationProps) {
-
-  // Removed handleAIGenerateBook
 
   const handleGeneratePage = async (pageNumber: number, prompt: string) => {
     if (!book || !bookId) return;
@@ -28,6 +28,12 @@ export default function useBookGeneration({
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       alert('Please log in to use AI generation.');
+      return;
+    }
+    
+    const apiKey = aiConfig.textModel === 'gpt-4o' ? aiConfig.openAIApiKey : aiConfig.geminiApiKey;
+    if (!apiKey) {
+      alert(`Please configure your ${aiConfig.textModel.toUpperCase()} API Key in the settings modal.`);
       return;
     }
 
@@ -53,6 +59,8 @@ export default function useBookGeneration({
         book.target_pages,
         book.font_size,
         session.access_token,
+        apiKey, // Pass API Key
+        aiConfig.textModel, // Pass Model
         book.book_prompt || undefined,
         activityTypes
       );
@@ -108,6 +116,12 @@ export default function useBookGeneration({
       alert('Please log in to use AI generation.');
       return;
     }
+    
+    const apiKey = aiConfig.openAIApiKey;
+    if (!apiKey) {
+      alert('Please configure your OpenAI API Key in the settings modal.');
+      return;
+    }
 
     const creditCheck = await checkAICredits(session.user.id);
     if (!creditCheck.allowed) {
@@ -122,9 +136,10 @@ export default function useBookGeneration({
 
       const imageUrl = await generateColoringImage(
         prompt,
-        'DALL-E 3',
-        bookId,
         session.access_token,
+        apiKey, // Pass API Key
+        aiConfig.imageModel, // Pass Model
+        bookId,
         activityTypes,
         tracingWord
       );

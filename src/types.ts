@@ -38,3 +38,15 @@ export const TRIM_SIZES: Record<TrimSize, TrimDimensions> = {
   '5x8': { width: 5, height: 8, unit: 'in' },
   '8.5x11': { width: 8.5, height: 11, unit: 'in' },
 };
+
+// --- New AI Configuration Types ---
+
+export type TextModel = 'gpt-4o' | 'gemini-1.5-flash';
+export type ImageModel = 'dall-e-3';
+
+export interface UserAIConfig {
+  openAIApiKey: string;
+  geminiApiKey: string;
+  textModel: TextModel;
+  imageModel: ImageModel;
+}

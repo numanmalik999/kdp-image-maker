@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
+declare const Deno: any;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -11,6 +13,8 @@ interface RequestBody {
   targetPages: number;
   fontSize: number;
   trimSize: string;
+  apiKey: string; // New: User's API Key
+  model: string; // New: User's selected model
 }
 
 Deno.serve(async (req: Request) => {
@@ -22,13 +26,26 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { prompt, targetPages, fontSize }: RequestBody = await req.json();
+    const { prompt, targetPages, fontSize, apiKey, model }: RequestBody = await req.json();
 
     if (!prompt || !targetPages) {
       return new Response(
         JSON.stringify({ error: "Prompt and targetPages are required" }),
         {
           status: 400,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+    }
+    
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "AI API Key is required for generation." }),
+        {
+          status: 401,
           headers: {
             ...corsHeaders,
             "Content-Type": "application/json",
@@ -63,79 +80,91 @@ Format the response as a JSON object with this structure:
   ]
 }`;
 
-    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
+    let response;
+    let generatedText;
 
-    if (!openaiApiKey) {
-      return new Response(
-        JSON.stringify({
-          error: "AI service not configured. Please contact the administrator."
+    if (model.startsWith('gpt')) {
+      // OpenAI API Call
+      response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Generate a complete book based on this description: ${prompt}\n\nThe book should be approximately ${targetPages} pages (${estimatedWords} words).` },
+          ],
+          temperature: 0.8,
+          max_tokens: 16000,
+          response_format: { type: "json_object" },
         }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error("OpenAI API error:", errorData);
+        return new Response(
+          JSON.stringify({ error: "Failed to generate content with OpenAI. Check your API key and usage limits." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      const data = await response.json();
+      generatedText = data.choices[0].message.content;
+
+    } else if (model.startsWith('gemini')) {
+      // Gemini API Call
+      const geminiApiKey = apiKey; // Assuming apiKey holds the Gemini key if selected
+      
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
         {
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `${systemPrompt}\n\nUser Request: Generate a complete book based on this description: ${prompt}\n\nThe book should be approximately ${targetPages} pages (${estimatedWords} words).`
+              }]
+            }],
+            config: {
+              temperature: 0.8,
+              responseMimeType: "application/json",
+            }
+          }),
         }
       );
-    }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: `Generate a complete book based on this description: ${prompt}\n\nThe book should be approximately ${targetPages} pages (${estimatedWords} words).`,
-          },
-        ],
-        temperature: 0.8,
-        max_tokens: 16000,
-        response_format: { type: "json_object" },
-      }),
-    });
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error("Gemini API error:", errorData);
+        return new Response(
+          JSON.stringify({ error: "Failed to generate content with Gemini. Check your API key and usage limits." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      const data = await response.json();
+      generatedText = data.candidates[0].content.parts[0].text;
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error("OpenAI API error:", errorData);
+    } else {
       return new Response(
-        JSON.stringify({
-          error: "Failed to generate content. Please try again."
-        }),
-        {
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
-        }
+        JSON.stringify({ error: `Unsupported model: ${model}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const data = await response.json();
-    const generatedText = data.choices[0].message.content;
 
     let bookContent;
     try {
       bookContent = JSON.parse(generatedText);
     } catch (parseError) {
+      console.error("Failed to parse AI response as JSON:", generatedText);
       bookContent = {
-        title: "Generated Book",
-        chapters: [
-          {
-            title: "Chapter 1",
-            content: generatedText,
-          },
-        ],
+        title: "Generated Book (Parse Error)",
+        chapters: [{ title: "Content", content: generatedText }],
       };
     }
 

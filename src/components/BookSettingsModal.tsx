@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Save, Info, Settings, Sparkles } from 'lucide-react';
-import { BookSettings } from '../types';
+import { BookSettings, UserAIConfig } from '../types';
 import AIGeneratorTab from './AIGeneratorTab';
 
 interface BookSettingsModalProps {
@@ -15,6 +15,9 @@ interface BookSettingsModalProps {
   isGeneratingAI: boolean;
   onInsertSample: () => void;
   onUpdateBookPrompt: (prompt: string) => void;
+  // New AI Config Props
+  aiConfig: UserAIConfig;
+  onUpdateAIConfig: (config: UserAIConfig) => void;
 }
 
 export default function BookSettingsModal({ 
@@ -28,6 +31,8 @@ export default function BookSettingsModal({
   isGeneratingAI,
   onInsertSample,
   onUpdateBookPrompt,
+  aiConfig,
+  onUpdateAIConfig,
 }: BookSettingsModalProps) {
   const [formData, setFormData] = useState<BookSettings>(settings);
   const [activeTab, setActiveTab] = useState<'settings' | 'ai'>('settings');
@@ -257,6 +262,8 @@ export default function BookSettingsModal({
               isGeneratingAI={isGeneratingAI}
               onInsertSample={onInsertSample}
               onUpdateBookPrompt={onUpdateBookPrompt}
+              aiConfig={aiConfig}
+              onUpdateAIConfig={onUpdateAIConfig}
             />
           )}
         </div>

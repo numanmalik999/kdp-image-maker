@@ -12,7 +12,9 @@ interface RequestBody {
   totalPages: number;
   fontSize: number;
   bookContext?: string;
-  activityTypes?: string[]; // Updated to array
+  activityTypes?: string[];
+  apiKey: string; // New: User's API Key
+  model: string; // New: User's selected model
 }
 
 // @ts-ignore: Deno.serve is available in the runtime environment
@@ -25,7 +27,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { prompt, pageNumber, totalPages, fontSize, bookContext, activityTypes }: RequestBody = await req.json();
+    const { prompt, pageNumber, totalPages, fontSize, bookContext, activityTypes, apiKey, model }: RequestBody = await req.json();
 
     if (!prompt || !pageNumber) {
       return new Response(
@@ -39,17 +41,12 @@ Deno.serve(async (req: Request) => {
         }
       );
     }
-
-    // @ts-ignore: Deno.env is available in the runtime environment
-    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-
-    if (!openaiApiKey) {
+    
+    if (!apiKey) {
       return new Response(
-        JSON.stringify({
-          error: "AI service not configured. Please contact the administrator."
-        }),
+        JSON.stringify({ error: "AI API Key is required for generation." }),
         {
-          status: 500,
+          status: 401,
           headers: {
             ...corsHeaders,
             "Content-Type": "application/json",
@@ -109,48 +106,79 @@ Return ONLY the page content as plain text, no JSON or formatting.`;
       );
     }
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "system",
-            content: systemPrompt,
-          },
-          {
-            role: "user",
-            content: userContent,
-          },
-        ],
-        temperature: 0.8,
-        max_tokens: 800,
-      }),
-    });
+    let pageContent;
 
-    if (!response.ok) {
-      const errorData = await response.text();
-      console.error("OpenAI API error:", errorData);
-      return new Response(
-        JSON.stringify({
-          error: "Failed to generate content. Please try again."
+    if (model.startsWith('gpt')) {
+      // OpenAI API Call
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userContent },
+          ],
+          temperature: 0.8,
+          max_tokens: 800,
         }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error("OpenAI API error:", errorData);
+        return new Response(
+          JSON.stringify({ error: "Failed to generate content with OpenAI. Check your API key and usage limits." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const data = await response.json();
+      pageContent = data.choices[0].message.content;
+
+    } else if (model.startsWith('gemini')) {
+      // Gemini API Call
+      const geminiApiKey = apiKey; // Assuming apiKey holds the Gemini key if selected
+      
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
         {
-          status: 500,
-          headers: {
-            ...corsHeaders,
-            "Content-Type": "application/json",
-          },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                text: `${systemPrompt}\n\nUser Request: ${userContent}`
+              }]
+            }],
+            config: {
+              temperature: 0.8,
+            }
+          }),
         }
       );
-    }
 
-    const data = await response.json();
-    const pageContent = data.choices[0].message.content;
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error("Gemini API error:", errorData);
+        return new Response(
+          JSON.stringify({ error: "Failed to generate content with Gemini. Check your API key and usage limits." }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      const data = await response.json();
+      pageContent = data.candidates[0].content.parts[0].text;
+
+    } else {
+      return new Response(
+        JSON.stringify({ error: `Unsupported model: ${model}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     return new Response(
       JSON.stringify({ content: pageContent }),

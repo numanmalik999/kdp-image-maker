@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { ArrowLeft, Settings, Loader2 } from 'lucide-react';
 import EditorArea from '../../components/EditorArea';
 import BookSettingsModal from '../../components/BookSettingsModal';
 import ExportModal from '../../components/ExportModal';
 import ImageEditorModal from '../../components/ImageEditorModal';
-import { BookSettings, Page, EditorTab } from '../../types';
+import { BookSettings, Page, EditorTab, UserAIConfig } from '../../types';
 import { generatePDF } from '../../utils/pdfGenerator';
 import { generateEPUB } from '../../utils/epubGenerator';
 import { SUPABASE_URL } from '../../lib/config';
@@ -18,8 +18,39 @@ import useBookData from '../../hooks/useBookData';
 import useBookPersistence from '../../hooks/useBookPersistence';
 import useBookGeneration from '../../hooks/useBookGeneration';
 
+const AI_CONFIG_KEY = 'kdp_ai_config';
+
+const loadAIConfig = (): UserAIConfig => {
+  if (typeof window !== 'undefined') {
+    const storedConfig = localStorage.getItem(AI_CONFIG_KEY);
+    if (storedConfig) {
+      try {
+        return JSON.parse(storedConfig);
+      } catch (e) {
+        console.error("Failed to parse AI config from local storage", e);
+      }
+    }
+  }
+  return {
+    openAIApiKey: '',
+    geminiApiKey: '',
+    textModel: 'gpt-4o',
+    imageModel: 'dall-e-3',
+  };
+};
+
 export default function BookEditor({ onBack }: { onBack: () => void; }) {
   const { bookId } = useParams<{ bookId: string }>();
+  
+  // --- AI Configuration State ---
+  const [aiConfig, setAiConfig] = useState<UserAIConfig>(loadAIConfig);
+
+  const updateAIConfig = useCallback((newConfig: UserAIConfig) => {
+    setAiConfig(newConfig);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(newConfig));
+    }
+  }, []);
   
   // --- UI State Management ---
   const [isSaving, setIsSaving] = useState(false);
@@ -63,6 +94,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     setBook,
     setPages,
     setIsGeneratingAI,
+    aiConfig, // Pass config to generation hook
   });
 
   // --- Effects ---
@@ -92,6 +124,12 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   
   const handleAIGenerateBook = async (prompt: string) => {
     if (!book || !bookId) return;
+    
+    if (!aiConfig.openAIApiKey) {
+      alert('Please configure your OpenAI API Key in the settings modal under "AI Generation" -> "API Keys & Models".');
+      return;
+    }
+    
     setIsGeneratingAI(true);
     
     const { data: { session } } = await supabase.auth.getSession();
@@ -101,6 +139,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       return;
     }
 
+    // NOTE: We still check credits against the user's subscription tier
     const creditCheck = await checkAICredits(session.user.id);
     if (!creditCheck.allowed) {
       alert(creditCheck.message);
@@ -115,7 +154,9 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
         book.target_pages,
         book.font_size,
         book.trim_size,
-        session.access_token
+        session.access_token,
+        aiConfig.openAIApiKey, // Pass API Key
+        aiConfig.textModel // Pass Model
       );
 
       // 2. Update book prompt and title in DB
@@ -253,7 +294,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar removed */}
       
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex-col overflow-hidden">
         <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-4">
             <button
@@ -315,6 +356,9 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
         isGeneratingAI={isGeneratingAI}
         onInsertSample={handleInsertSample}
         onUpdateBookPrompt={handleSaveBookPrompt}
+        // New AI Config Props
+        aiConfig={aiConfig}
+        onUpdateAIConfig={updateAIConfig}
       />
 
       <ExportModal

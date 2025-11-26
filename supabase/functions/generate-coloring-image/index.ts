@@ -12,7 +12,8 @@ interface RequestBody {
   prompt: string;
   activityTypes?: string[];
   tracingWord?: string;
-  // bookId removed
+  apiKey: string; // New: User's API Key
+  model: string; // New: User's selected model (should be dall-e-3)
 }
 
 // @ts-ignore: Deno is available in edge runtime
@@ -26,7 +27,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const requestBody = await req.json();
-    const { prompt, activityTypes, tracingWord } = requestBody as RequestBody;
+    const { prompt, activityTypes, tracingWord, apiKey, model } = requestBody as RequestBody;
 
     if (!prompt) {
       return new Response(JSON.stringify({ error: "Prompt is required" }), {
@@ -35,10 +36,16 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!openaiApiKey) {
-      return new Response(JSON.stringify({ error: "AI service not configured" }), {
-        status: 500,
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: "AI API Key is required for generation." }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (model !== 'dall-e-3') {
+      return new Response(JSON.stringify({ error: `Unsupported image model: ${model}. Only DALL-E 3 is supported.` }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -64,7 +71,7 @@ Deno.serve(async (req: Request) => {
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${openaiApiKey}`,
+        "Authorization": `Bearer ${apiKey}`, // Use client-provided key
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -78,9 +85,10 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!response.ok) {
-      console.error("OpenAI API error");
+      const errorData = await response.text();
+      console.error("OpenAI API error:", errorData);
       return new Response(
-        JSON.stringify({ error: "Failed to generate image" }),
+        JSON.stringify({ error: "Failed to generate image with DALL-E 3. Check your API key and usage limits." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -88,7 +96,7 @@ Deno.serve(async (req: Request) => {
     const data = await response.json();
     const imageUrl = data.data[0].url;
 
-    // Return the image URL directly for now
+    // Return the image URL directly
     return new Response(
       JSON.stringify({ imageUrl }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
