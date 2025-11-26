@@ -10,7 +10,6 @@ import { generatePDF } from '../../utils/pdfGenerator';
 import { generateEPUB } from '../../utils/epubGenerator';
 import { SUPABASE_URL } from '../../lib/config';
 import { generateBookContent } from '../../utils/aiGeneration';
-import { checkAICredits, decrementAICredits } from '../../utils/subscriptionLimits';
 import { supabase } from '../../lib/supabase';
 
 // Import new hooks
@@ -139,13 +138,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       return;
     }
 
-    // NOTE: We still check credits against the user's subscription tier
-    const creditCheck = await checkAICredits(session.user.id);
-    if (!creditCheck.allowed) {
-      alert(creditCheck.message);
-      setIsGeneratingAI(false);
-      return;
-    }
+    // Removed credit check logic
 
     try {
       // 1. Generate content (primarily for title/structure context)
@@ -165,8 +158,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
       // 3. Update book title locally (since handleSaveBookPrompt doesn't update title)
       setBook(prev => prev ? { ...prev, title: generatedContent.title } : null);
 
-      // 4. Decrement credits
-      await decrementAICredits(session.user.id);
+      // Removed credit decrement logic
 
       alert('Book content generated successfully! Now use the Pages tab to generate individual pages.');
     } catch (error: any) {

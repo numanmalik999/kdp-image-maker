@@ -2,9 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, BookOpen, Loader2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import BookCard from '../../components/BookCard';
-import SubscriptionStatus from '../../components/SubscriptionStatus';
 import NewBookModal from '../../components/NewBookModal';
-import { checkBookCreationLimit, incrementBookCount } from '../../utils/subscriptionLimits';
 import { TrimSize } from '../../types';
 
 interface Book {
@@ -19,11 +17,10 @@ interface Book {
 
 interface DashboardContentProps {
   onEditBook: (bookId: string) => void;
-  onViewPricing: () => void;
-  onManageBilling: () => void;
+  // Removed onEditBook, onViewPricing, onManageBilling
 }
 
-export default function DashboardContent({ onEditBook, onViewPricing, onManageBilling }: DashboardContentProps) {
+export default function DashboardContent({ onEditBook }: DashboardContentProps) {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -59,13 +56,8 @@ export default function DashboardContent({ onEditBook, onViewPricing, onManageBi
   const handleCreateBook = async (data: { title: string; author: string; trimSize: TrimSize }) => {
     if (!user) return;
 
-    // 1. Check limits
-    const limitCheck = await checkBookCreationLimit(user.id);
-    if (!limitCheck.allowed) {
-      alert(limitCheck.message);
-      return;
-    }
-
+    // Removed limit check (1. Check limits)
+    
     try {
       const { data: newBook, error } = await supabase
         .from('books')
@@ -83,8 +75,7 @@ export default function DashboardContent({ onEditBook, onViewPricing, onManageBi
 
       if (error) throw error;
 
-      // 2. Increment usage count
-      await incrementBookCount(user.id);
+      // Removed usage increment (2. Increment usage count)
 
       setIsModalOpen(false);
       setBooks(prev => [newBook, ...prev]);
@@ -122,11 +113,7 @@ export default function DashboardContent({ onEditBook, onViewPricing, onManageBi
           </button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-10">
-          <div className="lg:col-span-4">
-            <SubscriptionStatus onUpgrade={onViewPricing} onManageBilling={onManageBilling} />
-          </div>
-        </div>
+        {/* Removed SubscriptionStatus component */}
 
         {loading ? (
           <div className="text-center py-12">

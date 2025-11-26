@@ -1,7 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { BookData } from './useBookData';
 import { Page, UserAIConfig } from '../types';
-import { checkAICredits, decrementAICredits, incrementPageCount, incrementImageCount, checkPageCreationLimit } from '../utils/subscriptionLimits';
 import { generatePageContent, generateColoringImage } from '../utils/aiGeneration';
 
 interface UseBookGenerationProps {
@@ -37,19 +36,10 @@ export default function useBookGeneration({
       return;
     }
 
-    const creditCheck = await checkAICredits(session.user.id);
-    if (!creditCheck.allowed) {
-      alert(creditCheck.message);
-      return;
-    }
+    // Removed credit check logic
+    // Removed page limit check logic
 
     try {
-      const pageLimitCheck = await checkPageCreationLimit(session.user.id, bookId);
-      if (!pageLimitCheck.allowed) {
-        alert(pageLimitCheck.message);
-        return;
-      }
-
       const existingPage = pages.find(p => p.pageNumber === pageNumber);
       const activityTypes = existingPage?.activityTypes || ['story']; // Default to story if generating text
 
@@ -98,9 +88,7 @@ export default function useBookGeneration({
         }
       });
       
-      // Decrement credits and increment page count
-      await decrementAICredits(session.user.id);
-      await incrementPageCount(session.user.id);
+      // Removed credit decrement and page count increment logic
 
     } catch (error: any) {
       console.error('Page Generation Error:', error);
@@ -123,11 +111,7 @@ export default function useBookGeneration({
       return;
     }
 
-    const creditCheck = await checkAICredits(session.user.id);
-    if (!creditCheck.allowed) {
-      alert(creditCheck.message);
-      return;
-    }
+    // Removed credit check logic
 
     try {
       const existingPage = pages.find(p => p.pageNumber === pageNumber);
@@ -177,9 +161,7 @@ export default function useBookGeneration({
         }
       });
       
-      // Decrement credits and increment image count
-      await decrementAICredits(session.user.id);
-      await incrementImageCount(session.user.id);
+      // Removed credit decrement and image count increment logic
 
     } catch (error: any) {
       console.error('Image Generation Error:', error);

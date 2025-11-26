@@ -1,6 +1,5 @@
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import Landing from './pages/Landing';
-import Pricing from './pages/Pricing';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Dashboard from './pages/Dashboard';
@@ -34,8 +33,8 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Landing onGetStarted={() => navigate('/pricing')} onSignIn={() => navigate('/login')} onSignUp={() => navigate('/signup')} />} />
-        <Route path="/pricing" element={<Pricing onBack={handleBack} onAuthRequired={(type) => navigate(type === 'login' ? '/login' : '/signup')} />} />
+        <Route path="/" element={<Landing onGetStarted={() => navigate('/signup')} onSignIn={() => navigate('/login')} onSignUp={() => navigate('/signup')} />} />
+        {/* Removed /pricing route */}
         <Route path="/login" element={<Login onLoginSuccess={() => navigate('/dashboard')} onSwitchToSignup={() => navigate('/signup')} />} />
         <Route path="/signup" element={<Signup onSignupSuccess={() => navigate('/dashboard')} onSwitchToLogin={() => navigate('/login')} />} />
         <Route path="/editor/:bookId" element={<BookEditor onBack={() => navigate('/dashboard')} />} />
@@ -44,8 +43,7 @@ export default function App() {
           element={
             <Dashboard 
               onEditBook={(bookId) => navigate(`/editor/${bookId}`)} 
-              onViewPricing={() => navigate('/pricing')} 
-              onManageBilling={() => alert('Manage Billing functionality coming soon!')} 
+              // Removed onViewPricing and onManageBilling props
             />
           } 
         />

@@ -6,11 +6,10 @@ import { Loader2 } from 'lucide-react';
 
 interface DashboardProps {
   onEditBook: (bookId: string) => void;
-  onViewPricing: () => void;
-  onManageBilling: () => void;
+  // Removed onViewPricing and onManageBilling
 }
 
-export default function Dashboard({ onEditBook, onViewPricing, onManageBilling }: DashboardProps) {
+export default function Dashboard({ onEditBook }: DashboardProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
 
@@ -37,8 +36,7 @@ export default function Dashboard({ onEditBook, onViewPricing, onManageBilling }
   return (
     <DashboardContent
       onEditBook={onEditBook}
-      onViewPricing={onViewPricing}
-      onManageBilling={onManageBilling}
+      // Removed onViewPricing and onManageBilling
     />
   );
 }
