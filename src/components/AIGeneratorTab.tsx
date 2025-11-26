@@ -34,7 +34,8 @@ export default function AIGeneratorTab({
   
   const [aiPrompt, setAiPrompt] = useState(bookPrompt);
   const [localConfig, setLocalConfig] = useState(aiConfig);
-  const [activeSubTab, setActiveSubTab] = useState<'generator' | 'keys'>('generator');
+  // Change default sub-tab to 'keys'
+  const [activeSubTab, setActiveSubTab] = useState<'generator' | 'keys'>('keys');
 
   useEffect(() => {
     setAiPrompt(bookPrompt);
