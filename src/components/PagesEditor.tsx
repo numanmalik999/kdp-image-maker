@@ -52,7 +52,7 @@ export default function PagesEditor({
   const [localContent, setLocalContent] = useState(existingPage?.content || '');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync local content state when page changes
+  // Sync local content state when page changes or existingPage updates
   useEffect(() => {
     setLocalContent(existingPage?.content || '');
   }, [existingPage]);
@@ -62,10 +62,12 @@ export default function PagesEditor({
     setPagePrompt(bookPrompt);
   }, [bookPrompt, currentPageNumber]);
 
+  // Derive current page data, ensuring we use the latest image URL from existingPage
   const currentPage: Page = existingPage || {
     id: `temp-${currentPageNumber}`,
     pageNumber: currentPageNumber,
     content: localContent,
+    imageUrl: undefined, // Ensure default is undefined if no existing page
     activityTypes: isCoverPage ? ['image'] : ['coloring'], // Default cover to image
   };
 

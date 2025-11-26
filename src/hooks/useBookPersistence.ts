@@ -61,7 +61,7 @@ export default function useBookPersistence({
       
       console.log(`[SavePage] Page ${pageNumber} - Image URL to save:`, imageUrlToSave);
 
-      const { error } = await supabase
+      const { data: savedPage, error } = await supabase
         .from('book_pages')
         .upsert({
           book_id: bookId,
@@ -72,7 +72,9 @@ export default function useBookPersistence({
           image_url: imageUrlToSave, // Explicitly set the image URL
           is_front_cover: isFrontCover,
           is_back_cover: isBackCover,
-        }, { onConflict: 'book_id, page_number' });
+        }, { onConflict: 'book_id, page_number' })
+        .select()
+        .single();
 
       if (error) {
         console.error('Supabase Save Page Error:', error);
@@ -84,7 +86,7 @@ export default function useBookPersistence({
       setPages(prev => {
         const index = prev.findIndex(p => p.pageNumber === pageNumber);
         const newPage: Page = {
-          id: existingPage?.id || `db-temp-${pageNumber}`, // Use a temporary ID if none exists yet
+          id: savedPage.id,
           pageNumber,
           content,
           imageUrl: imageUrlToSave || undefined, // Use the saved URL
@@ -197,7 +199,7 @@ export default function useBookPersistence({
       const activityTypes = currentPageState?.activityTypes || ['image'];
       
       // 3. Update the page in the database immediately (CRITICAL for persistence)
-      const { error: dbError } = await supabase
+      const { data: savedPage, error: dbError } = await supabase
         .from('book_pages')
         .upsert({
           book_id: bookId,
@@ -205,15 +207,17 @@ export default function useBookPersistence({
           image_url: newImageUrl,
           content: currentPageState?.content || '',
           activity_type: activityTypes[0] || 'image',
-        }, { onConflict: 'book_id, page_number' });
+        }, { onConflict: 'book_id, page_number' })
+        .select()
+        .single();
 
       if (dbError) throw dbError;
 
-      // 4. Update local state with the new image URL
+      // 4. Update local state with the new image URL and ID
       setPages(prev => {
         const index = prev.findIndex(p => p.pageNumber === pageNumber);
         const newPage: Page = {
-          id: currentPageState?.id || `temp-${pageNumber}`,
+          id: savedPage.id, // Use the ID returned from the DB
           pageNumber,
           content: currentPageState?.content || '',
           imageUrl: newImageUrl,
@@ -269,17 +273,19 @@ export default function useBookPersistence({
       const newImageUrl = publicUrlData.publicUrl;
 
       // 3. Update the page in the database (Immediate persistence for image editing)
-      const { error: dbError } = await supabase
+      const { data: savedPage, error: dbError } = await supabase
         .from('book_pages')
         .update({ image_url: newImageUrl })
         .eq('book_id', bookId)
-        .eq('page_number', pageNumber);
+        .eq('page_number', pageNumber)
+        .select()
+        .single();
 
       if (dbError) throw dbError;
 
       // 4. Update local state
       setPages(prev => prev.map(p => 
-        p.pageNumber === pageNumber ? { ...p, imageUrl: newImageUrl } : p
+        p.pageNumber === pageNumber ? { ...p, imageUrl: newImageUrl, id: savedPage.id } : p
       ));
 
       alert('Image saved successfully!');
