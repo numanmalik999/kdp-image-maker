@@ -20,7 +20,8 @@ async function urlToDataUrl(url: string): Promise<string | null> {
     
     const response = await fetch(proxyUrl);
     if (!response.ok) {
-      console.error(`Failed to fetch image from proxy: ${response.statusText}`);
+      // CRITICAL: Include status code in the error message
+      console.error(`Failed to fetch image from proxy: ${response.status} ${response.statusText}`);
       return null;
     }
     
