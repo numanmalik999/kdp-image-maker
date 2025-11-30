@@ -74,6 +74,18 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
     
     let cursorY = marginPt;
     
+    // --- DEBUG HEADER ---
+    const pageTitle = page.pageNumber === 0 
+      ? 'Front Cover' 
+      : page.pageNumber === sortedPages[sortedPages.length - 1].pageNumber && book.has_back_cover
+        ? 'Back Cover'
+        : `Page ${page.pageNumber}`;
+        
+    doc.setFontSize(10);
+    doc.text(`--- ${book.title} | ${pageTitle} ---`, marginPt, cursorY);
+    cursorY += 15; // Move cursor down after header
+    doc.setFontSize(book.font_size); // Reset font size
+    
     // --- Handle Image Content ---
     if (page.imageUrl) {
       try {
@@ -82,7 +94,12 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
           // Calculate image dimensions to fit the content area while maintaining aspect ratio
           const img = new Image();
           img.src = dataUrl;
-          await new Promise(resolve => img.onload = resolve);
+          
+          // Wait for image to load before calculating dimensions
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+          });
           
           const imgRatio = img.width / img.height;
           let targetWidth = contentWidth;
@@ -116,29 +133,30 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
       // Split text into lines that fit the content width
       const lines = doc.splitTextToSize(page.content, contentWidth);
       
-      // If there is an image, start text below it, otherwise start at the top margin
-      // For simplicity in this initial implementation, if an image exists, we assume it takes the whole page.
-      // If both exist, we prioritize the image for coloring books, or place text at the top if no image.
+      // Determine starting Y position for text
+      let textStartY = cursorY + 10; // Start below the debug header
       
-      if (!page.imageUrl) {
-        doc.text(lines, marginPt, cursorY);
-      } else if (page.activityTypes?.includes('tracing')) {
-        // If it's a tracing page with an image, we might want to overlay the tracing text
-        // For now, we'll just place it at the bottom of the page area.
-        const textY = heightPt - marginPt - (lines.length * book.font_size * 1.2);
-        doc.text(lines, marginPt, textY);
+      if (page.imageUrl && page.activityTypes?.includes('tracing')) {
+        // If it's a tracing page with an image, place text at the bottom
+        textStartY = heightPt - marginPt - (lines.length * book.font_size * 1.2);
+      } else if (page.imageUrl && !page.activityTypes?.includes('tracing')) {
+        // If it's a coloring page with an image, we assume the image takes the whole page, 
+        // so we skip text unless it's tracing.
+        // For now, let's place it at the top if no image, or skip if image is present and not tracing.
+        if (page.pageNumber > 0) {
+            // Skip text if it's a standard coloring page (image only)
+            textStartY = -1000; // Effectively hide it
+        }
+      }
+      
+      if (textStartY > marginPt) {
+        doc.text(lines, marginPt, textStartY);
       }
     }
     
     // Add page number (optional, but helpful for KDP review)
-    const pageNumberDisplay = page.pageNumber === 0 
-      ? 'Front Cover' 
-      : page.pageNumber === sortedPages[sortedPages.length - 1].pageNumber && book.has_back_cover
-        ? 'Back Cover'
-        : `Page ${page.pageNumber}`;
-        
     doc.setFontSize(8);
-    doc.text(pageNumberDisplay, widthPt - marginPt, heightPt - marginPt + 10, { align: 'right' });
+    doc.text(pageTitle, widthPt - marginPt, heightPt - marginPt + 10, { align: 'right' });
   }
 
   // Save the PDF
