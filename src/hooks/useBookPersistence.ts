@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { BookSettings, Page, PageActivityType, EditorTab } from '../types';
 import { BookData } from './useBookData';
+import { cropImageToTrimSize } from '../utils/imageProcessor'; // Import the new utility
 
 interface UseBookPersistenceProps {
   bookId: string;
@@ -262,18 +263,21 @@ export default function useBookPersistence({
   };
 
   const handleImageUpload = async (pageNumber: number, file: File) => {
-    if (!bookId) return;
+    if (!bookId || !book) return;
     setIsSaving(true);
     try {
-      const filename = `${bookId}/${pageNumber}-${Date.now()}-${file.name}`;
+      // 1. Auto-crop the image to the book's trim size aspect ratio
+      const croppedBlob = await cropImageToTrimSize(file, book.trim_size);
+      
+      const filename = `${bookId}/${pageNumber}-${Date.now()}-${file.name.replace(/\.[^/.]+$/, "")}.png`;
 
-      // 1. Upload the image file to Supabase Storage
+      // 2. Upload the cropped image file to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('coloring_images')
-        .upload(filename, file, {
+        .upload(filename, croppedBlob, {
           cacheControl: '3600',
           upsert: true,
-          contentType: file.type,
+          contentType: 'image/png',
         });
 
       if (uploadError) {
@@ -281,7 +285,7 @@ export default function useBookPersistence({
         throw new Error(`Storage Upload Failed: ${uploadError.message}`);
       }
 
-      // 2. Get the public URL
+      // 3. Get the public URL
       const { data: publicUrlData } = supabase.storage
         .from('coloring_images')
         .getPublicUrl(filename);
@@ -298,7 +302,7 @@ export default function useBookPersistence({
       // Check if the current page number matches the expected back cover position
       const isBackCover = pageNumber > 0 && pageNumber === maxContentPage + 1; 
       
-      // 3. Update the page in the database immediately (CRITICAL for persistence)
+      // 4. Update the page in the database immediately (CRITICAL for persistence)
       const { data: savedPage, error: dbError } = await supabase
         .from('book_pages')
         .upsert({
@@ -315,7 +319,7 @@ export default function useBookPersistence({
 
       if (dbError) throw dbError;
       
-      // 3b. Update the main book record if a cover was newly created via upload
+      // 4b. Update the main book record if a cover was newly created via upload
       if ((isFrontCover && !book?.has_front_cover) || (isBackCover && !book?.has_back_cover)) {
         const updateData: Partial<BookData> = {};
         if (isFrontCover) updateData.has_front_cover = true;
@@ -325,7 +329,7 @@ export default function useBookPersistence({
         setBook((prev: BookData | null) => prev ? { ...prev, ...updateData } as BookData : null);
       }
 
-      // 4. Update local state with the new image URL and ID
+      // 5. Update local state with the new image URL and ID
       setPages(prev => {
         const index = prev.findIndex(p => p.pageNumber === pageNumber);
         const newPage: Page = {
@@ -345,7 +349,7 @@ export default function useBookPersistence({
         }
       });
       
-      alert('Image uploaded and saved successfully!');
+      alert('Image uploaded, cropped, and saved successfully!');
 
     } catch (error: any) {
       console.error('Image Upload Error:', error);
