@@ -113,7 +113,7 @@ export default function EditorArea({
             
             <button
               onClick={onGeneratePDF}
-              disabled={isGenerating || totalWords === 0}
+              disabled={isGenerating}
               className="flex items-center gap-2 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               <Download className="w-5 h-5" />
