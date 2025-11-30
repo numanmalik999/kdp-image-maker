@@ -291,6 +291,12 @@ export default function useBookPersistence({
       const currentPageState = pages.find(p => p.pageNumber === pageNumber);
       const activityTypes = currentPageState?.activityTypes || ['image'];
       
+      // Determine cover status based on page number and current max content page
+      const isFrontCover = pageNumber === 0;
+      const maxContentPage = getMaxContentPageNumber(pages);
+      // Check if the current page number matches the expected back cover position
+      const isBackCover = pageNumber > 0 && pageNumber === maxContentPage + 1; 
+      
       // 3. Update the page in the database immediately (CRITICAL for persistence)
       const { data: savedPage, error: dbError } = await supabase
         .from('book_pages')
@@ -300,11 +306,23 @@ export default function useBookPersistence({
           image_url: newImageUrl,
           content: currentPageState?.content || '',
           activity_type: activityTypes[0] || 'image',
+          is_front_cover: isFrontCover,
+          is_back_cover: isBackCover,
         }, { onConflict: 'book_id, page_number' })
         .select()
         .single();
 
       if (dbError) throw dbError;
+      
+      // 3b. Update the main book record if a cover was newly created via upload
+      if ((isFrontCover && !book?.has_front_cover) || (isBackCover && !book?.has_back_cover)) {
+        const updateData: Partial<BookData> = {};
+        if (isFrontCover) updateData.has_front_cover = true;
+        if (isBackCover) updateData.has_back_cover = true;
+        
+        await supabase.from('books').update(updateData).eq('id', bookId);
+        setBook((prev: BookData | null) => prev ? { ...prev, ...updateData } as BookData : null);
+      }
 
       // 4. Update local state with the new image URL and ID
       setPages(prev => {
