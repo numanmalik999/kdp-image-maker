@@ -22,7 +22,7 @@ export default function useBookPersistence({
   
   // Helper function to get the highest content page number
   const getMaxContentPageNumber = (currentPages: Page[]): number => {
-    const contentPages = currentPages.filter(p => p.pageNumber > 0);
+    const contentPages = currentPages.filter(p => p.pageNumber > 0 && p.pageNumber < 1000000); // Use a large number to exclude potential back cover placeholders if they are far out
     if (contentPages.length === 0) return 0;
     return Math.max(...contentPages.map(p => p.pageNumber));
   };
@@ -67,10 +67,11 @@ export default function useBookPersistence({
     if (!bookId) return;
     setIsSaving(true);
     try {
+      // Recalculate maxContentPage based on current pages state
       const maxContentPage = getMaxContentPageNumber(pages);
       
       const isFrontCover = pageNumber === 0;
-      // Back cover is now defined as maxContentPage + 1 if hasBackCover is true
+      // Back cover is the page number immediately following the last content page
       const isBackCover = book?.has_back_cover && pageNumber === maxContentPage + 1;
       
       // Find the latest state of the page from the hook's props

@@ -35,6 +35,14 @@ interface RawPage {
   activity_type: PageActivityType; // DB stores singular string
 }
 
+// Helper function to get the highest content page number
+const getMaxContentPageNumber = (currentPages: Page[]): number => {
+    const contentPages = currentPages.filter(p => p.pageNumber > 0);
+    if (contentPages.length === 0) return 0;
+    return Math.max(...contentPages.map(p => p.pageNumber));
+};
+
+
 export default function useBookData(bookId: string | undefined, onBookNotFound: () => void): UseBookDataResult {
   const [book, setBook] = useState<BookData | null>(null);
   const [pages, setPages] = useState<Page[]>([]);
@@ -71,17 +79,44 @@ export default function useBookData(bookId: string | undefined, onBookNotFound: 
         activityTypes: rawPage.activity_type ? [rawPage.activity_type] : ['coloring'],
       }));
       
-      // If no content pages exist (new book or all deleted), ensure page 1 exists for editing
-      const contentPagesExist = mappedPages.some(p => p.pageNumber > 0);
-      if (!contentPagesExist) {
+      // Determine max content page number from loaded pages
+      let maxContentPage = getMaxContentPageNumber(mappedPages);
+
+      // 1. Ensure Front Cover (Page 0) exists if setting is enabled
+      if (bookData.has_front_cover && !mappedPages.some(p => p.pageNumber === 0)) {
+        mappedPages.push({
+          id: `temp-0`,
+          pageNumber: 0,
+          content: '',
+          imageUrl: undefined,
+          activityTypes: ['image'],
+        });
+      }
+      
+      // 2. Ensure Back Cover (Page maxContentPage + 1) exists if setting is enabled
+      const backCoverPageNumber = maxContentPage + 1;
+      if (bookData.has_back_cover && backCoverPageNumber > 0 && !mappedPages.some(p => p.pageNumber === backCoverPageNumber)) {
+        mappedPages.push({
+          id: `temp-${backCoverPageNumber}`,
+          pageNumber: backCoverPageNumber,
+          content: '',
+          imageUrl: undefined,
+          activityTypes: ['image'],
+        });
+      }
+
+      // 3. If no content pages exist (maxContentPage is 0), ensure page 1 exists for editing
+      if (maxContentPage === 0 && !mappedPages.some(p => p.pageNumber === 1)) {
         mappedPages.push({
           id: `temp-1`,
           pageNumber: 1,
           content: '',
+          imageUrl: undefined,
           activityTypes: ['coloring'],
         });
-        mappedPages.sort((a, b) => a.pageNumber - b.pageNumber);
       }
+      
+      mappedPages.sort((a, b) => a.pageNumber - b.pageNumber);
 
       // Ensure types match the local state structure
       const typedBookData: BookData = {
