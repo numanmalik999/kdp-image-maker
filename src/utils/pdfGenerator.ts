@@ -98,7 +98,10 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
           // Wait for image to load before calculating dimensions
           await new Promise((resolve, reject) => {
             img.onload = resolve;
-            img.onerror = reject;
+            img.onerror = (e) => {
+              console.error("Image element failed to load:", e);
+              reject(new Error("Image element failed to load"));
+            };
           });
           
           const imgRatio = img.width / img.height;
@@ -116,12 +119,15 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
           const x = marginPt + (contentWidth - targetWidth) / 2;
           const y = marginPt + (contentHeight - targetHeight) / 2;
           
+          // Use the image dimensions and calculated position
           doc.addImage(dataUrl, 'PNG', x, y, targetWidth, targetHeight);
+        } else {
+          // Fallback if dataUrl conversion failed
+          doc.text(`[Image Fetch Failed: ${page.imageUrl}]`, marginPt, cursorY + 20);
         }
       } catch (e) {
         console.error(`Failed to add image for page ${page.pageNumber}:`, e);
-        doc.text(`[Image Load Error: ${page.imageUrl}]`, marginPt, cursorY);
-        cursorY += book.font_size * 2;
+        doc.text(`[Image Processing Error: ${page.imageUrl}]`, marginPt, cursorY + 20);
       }
     }
     
@@ -142,7 +148,6 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
       } else if (page.imageUrl && !page.activityTypes?.includes('tracing')) {
         // If it's a coloring page with an image, we assume the image takes the whole page, 
         // so we skip text unless it's tracing.
-        // For now, let's place it at the top if no image, or skip if image is present and not tracing.
         if (page.pageNumber > 0) {
             // Skip text if it's a standard coloring page (image only)
             textStartY = -1000; // Effectively hide it
@@ -155,8 +160,14 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
     }
     
     // Add page number (optional, but helpful for KDP review)
+    const pageNumberDisplay = page.pageNumber === 0 
+      ? 'Front Cover' 
+      : page.pageNumber === sortedPages[sortedPages.length - 1].pageNumber && book.has_back_cover
+        ? 'Back Cover'
+        : `Page ${page.pageNumber}`;
+        
     doc.setFontSize(8);
-    doc.text(pageTitle, widthPt - marginPt, heightPt - marginPt + 10, { align: 'right' });
+    doc.text(pageNumberDisplay, widthPt - marginPt, heightPt - marginPt + 10, { align: 'right' });
   }
 
   // Save the PDF
