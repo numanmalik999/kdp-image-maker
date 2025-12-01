@@ -133,7 +133,8 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
     canvas.height = img.naturalHeight;
     
     // Draw the image onto the canvas
-    ctx.drawImage(img, 0, 0);
+    // This requires the image to be loaded with crossOrigin="anonymous"
+    ctx.drawImage(img, 0, 0); 
     
     setCanvasInitialized(true);
     setHasDrawn(false);
@@ -354,6 +355,7 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
                   src={src}
                   onLoad={onImageLoad}
                   onError={onImageError}
+                  crossOrigin="anonymous" // Added this line
                   // Ensure the image is visible in crop mode, and hidden/static in draw mode
                   style={{ 
                     maxHeight: '70vh', 
