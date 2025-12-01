@@ -65,15 +65,21 @@ Deno.serve(async (req: Request) => {
 
     const imageBlob = await imageResponse.blob();
     const contentType = imageResponse.headers.get("content-type") || "image/png";
+    
+    // Extract filename for Content-Disposition header
+    const filenameMatch = imageUrl.match(/[^/\\?#]+\.\w{3,4}(?=([?#]|$))/);
+    const filename = filenameMatch ? filenameMatch[0] : 'image.png';
 
     console.log('Successfully proxied image, size:', imageBlob.size, 'type:', contentType);
 
     return new Response(imageBlob, {
       status: 200,
       headers: {
-        ...corsHeaders,
+        // CRITICAL: Ensure CORS header is present on the final image response
+        'Access-Control-Allow-Origin': '*', 
         "Content-Type": contentType,
         "Cache-Control": "public, max-age=3600",
+        "Content-Disposition": `inline; filename="${filename}"`,
       },
     });
   } catch (error) {

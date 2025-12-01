@@ -56,10 +56,18 @@ function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: Drawin
     if (!ctx) return;
 
     setLoadError(false); // Reset error on new src
-    
+    setImageDimensions({ width: 0, height: 0 }); // Reset dimensions
+
     const img = new Image();
     img.crossOrigin = "Anonymous";
     img.onload = () => {
+      if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+        console.error("Image loaded but reported zero dimensions.");
+        setLoadError(true);
+        onImageLoad(false);
+        return;
+      }
+      
       // Set internal canvas dimensions to match image dimensions (high resolution)
       canvas.width = img.naturalWidth;
       canvas.height = img.naturalHeight;
@@ -74,8 +82,8 @@ function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: Drawin
       // Expose the save function to the parent component
       onCanvasReady(handleSaveDrawing);
     };
-    img.onerror = () => {
-      console.error("Failed to load image for drawing.");
+    img.onerror = (e) => {
+      console.error("Failed to load image for drawing.", e);
       setLoadError(true); // Set error state
       onImageLoad(false);
     };
