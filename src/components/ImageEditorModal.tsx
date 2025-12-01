@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ReactCrop, { Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
-import { X, Save, Loader2, Crop as CropIcon, Palette } from 'lucide-react';
+import { X, Save, Loader2, Crop as CropIcon } from 'lucide-react';
 
 interface ImageEditorModalProps {
   isOpen: boolean;
@@ -10,9 +10,6 @@ interface ImageEditorModalProps {
   onEditComplete: (editedImageBlob: Blob) => Promise<void>;
   isProcessing: boolean;
 }
-
-// --- Constants ---
-const COLOR_OPTIONS = ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFFFF']; // Black, Red, Green, Blue, White (Eraser)
 
 function centerAspectCrop(
   mediaWidth: number,
@@ -35,7 +32,6 @@ function centerAspectCrop(
 }
 
 export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete, isProcessing }: ImageEditorModalProps) {
-  const [mode, setMode] = useState<'crop' | 'draw'>('crop');
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<Crop>();
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -43,23 +39,11 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
   
   // Refs for image and canvas
   const imgRef = useRef<HTMLImageElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Drawing State
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [color, setColor] = useState(COLOR_OPTIONS[0]);
-  const [brushSize, setBrushSize] = useState(10);
-  const [hasDrawn, setHasDrawn] = useState(false);
-  
-  // State to track if the canvas has been initialized with the image
-  const [canvasInitialized, setCanvasInitialized] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       setImageLoaded(false);
       setLoadError(false);
-      setHasDrawn(false);
-      setCanvasInitialized(false);
     }
   }, [isOpen, src]);
 
@@ -73,9 +57,6 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
     setCrop(centerAspectCrop(width, height, 1)); 
     setImageLoaded(true);
     setLoadError(false);
-    
-    // Initialize canvas immediately after image loads
-    initializeCanvasForDrawing(e.currentTarget);
   };
   
   const onImageError = () => {
@@ -119,125 +100,25 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
     });
   };
   
-  // --- Drawing Logic ---
-  
-  const initializeCanvasForDrawing = useCallback((img: HTMLImageElement) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Set canvas dimensions to match the natural size of the loaded image
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    
-    // Draw the image onto the canvas
-    // This requires the image to be loaded with crossOrigin="anonymous"
-    ctx.drawImage(img, 0, 0); 
-    
-    setCanvasInitialized(true);
-    setHasDrawn(false);
-    
-  }, []);
-
-  const getCanvasScale = (canvas: HTMLCanvasElement) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    return { scaleX, scaleY, rect };
-  };
-
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (isProcessing || !canvasInitialized) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const { scaleX, scaleY, rect } = getCanvasScale(canvas);
-
-    ctx.beginPath();
-    ctx.moveTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
-    setIsDrawing(true);
-    setHasDrawn(true);
-  };
-
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || isProcessing || !canvasInitialized) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const { scaleX, scaleY, rect } = getCanvasScale(canvas);
-
-    ctx.lineWidth = brushSize;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = color;
-    
-    // If color is white, use 'destination-out' for erasing effect
-    ctx.globalCompositeOperation = color === '#FFFFFF' ? 'destination-out' : 'source-over';
-
-    ctx.lineTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
-    ctx.stroke();
-  };
-
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
-  
   const handleSave = async () => {
-    if (isProcessing) return;
+    if (isProcessing || !completedCrop || !imgRef.current) return;
     
     try {
-      let blob: Blob;
-      
-      // If drawing was performed, save the canvas content
-      if (hasDrawn && canvasRef.current) {
-        blob = await new Promise((resolve, reject) => {
-          canvasRef.current?.toBlob((b) => {
-            if (b) resolve(b);
-            else reject(new Error('Canvas to Blob failed during drawing save.'));
-          }, 'image/png');
-        });
-      } 
-      // If cropping was performed (and no drawing), save the cropped image
-      else if (completedCrop && imgRef.current) {
-        blob = await getCroppedImage(imgRef.current, completedCrop);
-      } 
-      // If neither, use the original image (if loaded)
-      else if (imgRef.current) {
-        // If no changes, we still need to return a blob of the original image
-        blob = await getCroppedImage(imgRef.current, { x: 0, y: 0, width: 100, height: 100, unit: '%' });
-      } else {
-        alert('Image not loaded.');
-        return;
-      }
-      
+      const blob = await getCroppedImage(imgRef.current, completedCrop);
       await onEditComplete(blob);
     } catch (error) {
       console.error('Error during save:', error);
       alert('Failed to save image changes.');
     }
   };
-  
-  const handleClearDrawing = () => {
-    if (confirm('Are you sure you want to clear all drawings and revert to the original image?')) {
-      if (imgRef.current) {
-        initializeCanvasForDrawing(imgRef.current);
-        setHasDrawn(false);
-      }
-    }
-  };
 
-  const isSaveDisabled = isProcessing || !imageLoaded;
+  const isSaveDisabled = isProcessing || !imageLoaded || !completedCrop;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl mx-4 max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-gray-200 flex-shrink-0">
-          <h2 className="text-xl font-bold text-gray-900">Edit Image</h2>
+          <h2 className="text-xl font-bold text-gray-900">Crop Image</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -246,88 +127,22 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
           </button>
         </div>
 
-        <div className="flex-1 overflow-hidden p-4 flex gap-4 bg-gray-100">
+        <div className="flex-1 overflow-auto p-4 flex gap-4 bg-gray-100">
           
-          {/* Left Sidebar: Controls/Palette (Always visible) */}
+          {/* Left Sidebar: Controls/Palette (Cropping is the only mode now) */}
           <div className="flex-shrink-0 w-64 p-4 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col space-y-4 overflow-y-auto">
-            <h4 className="text-lg font-semibold text-gray-900 mb-2">Tools</h4>
+            <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
+              <CropIcon className="w-5 h-5 text-blue-600" />
+              Crop Tool
+            </h4>
             
-            <div className="flex gap-2">
-              <button
-                onClick={() => setMode('crop')}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors flex-1 justify-center ${
-                  mode === 'crop'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                disabled={!imageLoaded}
-              >
-                <CropIcon className="w-4 h-4" />
-                Crop Mode
-              </button>
-              <button
-                onClick={() => setMode('draw')}
-                disabled={!imageLoaded}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors flex-1 justify-center ${
-                  mode === 'draw'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50'
-                }`}
-              >
-                <Palette className="w-4 h-4" />
-                Draw Mode
-              </button>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+              <p className="font-medium mb-1">Aspect Ratio:</p>
+              <p>The crop area is locked to a 1:1 aspect ratio, suitable for square coloring pages.</p>
             </div>
-            
-            {mode === 'draw' && (
-              <div className="space-y-4 pt-4 border-t border-gray-200">
-                <h4 className="text-lg font-semibold text-gray-900">Drawing Tools</h4>
-                
-                {/* Color Selector */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Color / Tool:</label>
-                  <div className="flex flex-wrap gap-3">
-                    {COLOR_OPTIONS.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setColor(c)}
-                        className={`w-8 h-8 rounded-full border-2 transition-all ${
-                          color === c ? 'ring-2 ring-offset-2 ring-blue-500' : 'hover:ring-1 ring-gray-300'
-                        }`}
-                        style={{ backgroundColor: c, borderColor: c === '#FFFFFF' ? '#ccc' : c }}
-                        title={c === '#FFFFFF' ? 'Eraser' : c}
-                      />
-                    ))}
-                  </div>
-                </div>
-                
-                {/* Brush Size */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Brush Size:</label>
-                  <input
-                    type="range"
-                    min="1"
-                    max="50"
-                    value={brushSize}
-                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                    className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer range-sm"
-                    disabled={loadError}
-                  />
-                  <span className="text-sm text-gray-600 mt-1 block text-center">{brushSize}px</span>
-                </div>
-                
-                <button
-                  onClick={handleClearDrawing}
-                  disabled={!hasDrawn}
-                  className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium disabled:opacity-50"
-                >
-                  Clear Drawing
-                </button>
-              </div>
-            )}
           </div>
           
-          {/* Right Area: Image/Canvas Display */}
+          {/* Right Area: Image Display */}
           <div className="flex-1 flex items-center justify-center overflow-auto bg-gray-200 rounded-lg min-h-[400px] relative">
             {loadError ? (
               <div className="text-center p-8 text-red-700">
@@ -340,49 +155,28 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
               </div>
             )}
             
-            {/* Image Container: Always render ReactCrop to handle image loading */}
-            <div className="max-w-full max-h-full flex items-center justify-center" style={{ display: imageLoaded ? 'block' : 'none' }}>
-              <ReactCrop
-                crop={crop}
-                onChange={c => setCrop(c)}
-                onComplete={(c) => setCompletedCrop(c)}
-                aspect={1} // Enforce 1:1 aspect ratio for coloring pages
-                disabled={mode === 'draw'} // Disable cropping handles in draw mode
-              >
-                <img
-                  ref={imgRef}
-                  alt="Editable image"
-                  src={src}
-                  onLoad={onImageLoad}
-                  onError={onImageError}
-                  crossOrigin="anonymous" // Added this line
-                  // Ensure the image is visible in crop mode, and hidden/static in draw mode
-                  style={{ 
-                    maxHeight: '70vh', 
-                    maxWidth: '100%',
-                    opacity: mode === 'draw' ? 0 : 1, // Hide image in draw mode
-                    pointerEvents: mode === 'draw' ? 'none' : 'auto',
-                  }}
-                />
-              </ReactCrop>
-            </div>
-            
-            {/* Drawing Canvas Overlay */}
             {imageLoaded && (
-              <canvas
-                ref={canvasRef}
-                onMouseDown={startDrawing}
-                onMouseMove={draw}
-                onMouseUp={stopDrawing}
-                onMouseLeave={stopDrawing}
-                className={`absolute top-0 left-0 w-full h-full cursor-crosshair border border-gray-400 shadow-lg ${mode === 'draw' ? 'block' : 'hidden'}`}
-                style={{ 
-                  // Match the size of the ReactCrop container dynamically
-                  width: imgRef.current?.clientWidth,
-                  height: imgRef.current?.clientHeight,
-                  touchAction: 'none', 
-                }}
-              />
+              <div className="max-w-full max-h-full flex items-center justify-center">
+                <ReactCrop
+                  crop={crop}
+                  onChange={c => setCrop(c)}
+                  onComplete={(c) => setCompletedCrop(c)}
+                  aspect={1} // Enforce 1:1 aspect ratio
+                >
+                  <img
+                    ref={imgRef}
+                    alt="Editable image"
+                    src={src}
+                    onLoad={onImageLoad}
+                    onError={onImageError}
+                    crossOrigin="anonymous"
+                    style={{ 
+                      maxHeight: '70vh', 
+                      maxWidth: '100%',
+                    }}
+                  />
+                </ReactCrop>
+              </div>
             )}
           </div>
         </div>
@@ -407,7 +201,7 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
             ) : (
               <>
                 <Save className="w-4 h-4" />
-                Save Changes
+                Save Cropped Image
               </>
             )}
           </button>

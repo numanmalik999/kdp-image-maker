@@ -241,10 +241,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     }
   };
 
-  const handleExportKindle = () => {
-    alert('Kindle export functionality is not yet implemented.');
-    setIsExportModalOpen(false);
-  };
+  // Removed handleExportKindle
 
   // --- Image Editing ---
 
@@ -382,7 +379,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
         onClose={() => setIsExportModalOpen(false)}
         onExportPDF={handleExportPDF}
         onExportEPUB={handleExportEPUB}
-        onExportKindle={handleExportKindle}
         isExporting={isExporting}
       />
 

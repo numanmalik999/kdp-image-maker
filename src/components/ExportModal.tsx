@@ -1,11 +1,10 @@
-import { X, Download, FileText, Book } from 'lucide-react';
+import { X, FileText, Book } from 'lucide-react';
 
 interface ExportModalProps {
   isOpen: boolean;
   onClose: () => void;
   onExportPDF: () => void;
   onExportEPUB: () => void;
-  onExportKindle: () => void;
   isExporting: boolean;
 }
 
@@ -14,7 +13,6 @@ export default function ExportModal({
   onClose,
   onExportPDF,
   onExportEPUB,
-  onExportKindle,
   isExporting,
 }: ExportModalProps) {
   if (!isOpen) return null;
@@ -54,19 +52,6 @@ export default function ExportModal({
             <Book className="w-5 h-5" />
             Download as EPUB
           </button>
-
-          <button
-            onClick={onExportKindle}
-            disabled={isExporting}
-            className="w-full px-4 py-3 border-2 border-orange-600 text-orange-600 rounded-lg hover:bg-orange-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
-          >
-            <Download className="w-5 h-5" />
-            Send to Kindle
-          </button>
-
-          <p className="text-xs text-gray-500 mt-4">
-            Note: Send to Kindle requires your Kindle email address to be configured.
-          </p>
         </div>
 
         <div className="p-6 border-t border-gray-200">
