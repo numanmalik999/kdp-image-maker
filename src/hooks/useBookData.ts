@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Page, TrimSize, FontSize, PageActivityType } from '../types';
 
+// Simple in-memory cache for book data
+const bookCache: Record<string, BookData> = {};
+
 // Define the structure of the book data fetched from Supabase
 export interface BookData {
   id: string;
@@ -44,12 +47,51 @@ const getMaxContentPageNumber = (currentPages: Page[]): number => {
 
 
 export default function useBookData(bookId: string | undefined, onBookNotFound: () => void): UseBookDataResult {
-  const [book, setBook] = useState<BookData | null>(null);
-  const [pages, setPages] = useState<Page[]>([]);
+  const [book, setBookState] = useState<BookData | null>(null);
+  const [pages, setPagesState] = useState<Page[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const updateCache = useCallback((newBook: BookData | null, newPages: Page[]) => {
+    if (newBook && newBook.id) {
+      bookCache[newBook.id] = { ...newBook, pages: newPages };
+    }
+  }, []);
+
+  const setBook = useCallback<React.Dispatch<React.SetStateAction<BookData | null>>>(updater => {
+    setBookState(prevBook => {
+      const newBook = typeof updater === 'function' ? updater(prevBook) : updater;
+      if (newBook) {
+        // If setting book, use current pages state for cache update
+        updateCache(newBook, pages);
+      }
+      return newBook;
+    });
+  }, [pages, updateCache]);
+
+  const setPages = useCallback<React.Dispatch<React.SetStateAction<Page[]>>>(updater => {
+    setPagesState(prevPages => {
+      const newPages = typeof updater === 'function' ? updater(prevPages) : updater;
+      if (book) {
+        // If setting pages, use current book state for cache update
+        updateCache(book, newPages);
+      }
+      return newPages;
+    });
+  }, [book, updateCache]);
+
 
   const loadBook = useCallback(async () => {
     if (!bookId) return;
+    
+    // 1. Check Cache
+    if (bookCache[bookId]) {
+      const cachedData = bookCache[bookId];
+      setBookState(cachedData);
+      setPagesState(cachedData.pages);
+      setLoading(false);
+      return; // Use cached data instantly
+    }
+    
     setLoading(true);
     try {
       const { data: bookData, error } = await supabase
@@ -126,8 +168,11 @@ export default function useBookData(bookId: string | undefined, onBookNotFound: 
         pages: mappedPages,
       };
 
-      setBook(typedBookData);
-      setPages(mappedPages);
+      // 4. Store in Cache
+      bookCache[bookId] = typedBookData;
+
+      setBookState(typedBookData);
+      setPagesState(mappedPages);
       
     } catch (error: any) {
       console.error('Error loading book:', error);
@@ -135,11 +180,11 @@ export default function useBookData(bookId: string | undefined, onBookNotFound: 
     } finally {
       setLoading(false);
     }
-  }, [bookId, onBookNotFound]);
+  }, [bookId, onBookNotFound, updateCache]);
 
   useEffect(() => {
     loadBook();
   }, [loadBook]);
 
-  return { book, pages, loading, setBook, setPages, loadBook };
+  return { book: book, pages, loading, setBook, setPages, loadBook };
 }
