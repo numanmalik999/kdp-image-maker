@@ -73,19 +73,8 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
       doc.addPage([widthPt, heightPt], widthPt > heightPt ? 'l' : 'p');
     }
     
+    // Start cursor below the top margin
     let cursorY = marginPt;
-    
-    // --- DEBUG HEADER ---
-    const pageTitle = page.pageNumber === 0 
-      ? 'Front Cover' 
-      : page.pageNumber === sortedPages[sortedPages.length - 1].pageNumber && book.has_back_cover
-        ? 'Back Cover'
-        : `Page ${page.pageNumber}`;
-        
-    doc.setFontSize(10);
-    doc.text(`--- ${book.title} | ${pageTitle} ---`, marginPt, cursorY);
-    cursorY += 15; // Move cursor down after header
-    doc.setFontSize(book.font_size); // Reset font size
     
     // --- Handle Image Content ---
     if (page.imageUrl) {
@@ -141,7 +130,7 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
       const lines = doc.splitTextToSize(page.content, contentWidth);
       
       // Determine starting Y position for text
-      let textStartY = cursorY + 10; // Start below the debug header
+      let textStartY = cursorY; // Start at the top margin
       
       if (page.imageUrl && page.activityTypes?.includes('tracing')) {
         // If it's a tracing page with an image, place text at the bottom
@@ -155,20 +144,12 @@ export async function generatePDF(book: Book, pages: Page[]): Promise<void> {
         }
       }
       
-      if (textStartY > marginPt) {
+      if (textStartY >= marginPt) {
         doc.text(lines, marginPt, textStartY);
       }
     }
     
-    // Add page number (optional, but helpful for KDP review)
-    const pageNumberDisplay = page.pageNumber === 0 
-      ? 'Front Cover' 
-      : page.pageNumber === sortedPages[sortedPages.length - 1].pageNumber && book.has_back_cover
-        ? 'Back Cover'
-        : `Page ${page.pageNumber}`;
-        
-    doc.setFontSize(8);
-    doc.text(pageNumberDisplay, widthPt - marginPt, heightPt - marginPt + 10, { align: 'right' });
+    // Removed page number display
   }
 
   // Save the PDF
