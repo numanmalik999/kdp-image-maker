@@ -47,6 +47,7 @@ function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: Drawin
   const [color, setColor] = useState(COLOR_OPTIONS[0]);
   const [brushSize, setBrushSize] = useState(10);
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+  const [loadError, setLoadError] = useState(false); // New state for load error
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -54,6 +55,8 @@ function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: Drawin
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    setLoadError(false); // Reset error on new src
+    
     const img = new Image();
     img.crossOrigin = "Anonymous";
     img.onload = () => {
@@ -73,6 +76,7 @@ function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: Drawin
     };
     img.onerror = () => {
       console.error("Failed to load image for drawing.");
+      setLoadError(true); // Set error state
       onImageLoad(false);
     };
     img.src = src;
@@ -173,6 +177,7 @@ function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: Drawin
             value={brushSize}
             onChange={(e) => setBrushSize(parseInt(e.target.value))}
             className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer range-sm"
+            disabled={loadError}
           />
           <span className="text-sm text-gray-600 mt-1 block text-center">{brushSize}px</span>
         </div>
@@ -180,7 +185,12 @@ function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: Drawin
       
       {/* Right Area: Canvas Display */}
       <div className="flex-1 flex items-center justify-center overflow-auto bg-gray-200 rounded-lg min-h-[400px]">
-        {!imageDimensions.width ? (
+        {loadError ? (
+          <div className="text-center p-8 text-red-700">
+            <p className="font-semibold mb-2">Error Loading Image</p>
+            <p className="text-sm text-gray-600">Could not load the image for drawing. Please ensure the image URL is valid and the proxy function is working.</p>
+          </div>
+        ) : !imageDimensions.width ? (
           <div className="w-96 h-96 flex items-center justify-center bg-gray-200">
             <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
           </div>
@@ -226,6 +236,17 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
   const [imageLoaded, setImageLoaded] = useState(false);
   const [drawingSaveFn, setDrawingSaveFn] = useState<(() => Promise<Blob | null>) | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  
+  const [loadError, setLoadError] = useState(false); // State for image loading error in crop tab
+
+  useEffect(() => {
+    // Reset state when modal opens/closes or src changes
+    if (isOpen) {
+      setImageLoaded(false);
+      setLoadError(false);
+      // Note: Crop state is handled by ReactCrop internally on image load
+    }
+  }, [isOpen, src]);
 
   if (!isOpen) return null;
 
@@ -236,6 +257,12 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
     setImage(e.currentTarget);
     setCrop(centerAspectCrop(width, height, 1)); // Default to 1:1 aspect ratio for coloring pages
     setImageLoaded(true);
+    setLoadError(false);
+  };
+  
+  const onImageError = () => {
+    setLoadError(true);
+    setImageLoaded(false);
   };
 
   const getCroppedImage = (image: HTMLImageElement, crop: Crop): Promise<Blob> => {
@@ -352,7 +379,12 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
         <div className="flex-1 overflow-hidden p-4 flex items-center justify-center bg-gray-100" style={{ maxHeight: '70vh' }}>
           {activeTab === 'crop' ? (
             <div className="max-w-full max-h-full flex items-center justify-center">
-              {!imageLoaded && (
+              {loadError ? (
+                <div className="text-center p-8 text-red-700">
+                  <p className="font-semibold mb-2">Error Loading Image</p>
+                  <p className="text-sm text-gray-600">Could not load the image for cropping. Please ensure the image URL is valid and the proxy function is working.</p>
+                </div>
+              ) : !imageLoaded && (
                 <div className="w-96 h-96 flex items-center justify-center bg-gray-200">
                   <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
                 </div>
@@ -368,6 +400,7 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
                   alt="Crop me"
                   src={src}
                   onLoad={onImageLoad}
+                  onError={onImageError}
                   style={{ maxHeight: '70vh', maxWidth: '100%', display: imageLoaded ? 'block' : 'none' }}
                 />
               </ReactCrop>
@@ -376,7 +409,10 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
             <DrawingCanvas 
               src={src} 
               isProcessing={isProcessing} 
-              onImageLoad={setImageLoaded}
+              onImageLoad={(loaded) => {
+                setImageLoaded(loaded);
+                setLoadError(!loaded);
+              }}
               onCanvasReady={setDrawingSaveFn}
             />
           )}
