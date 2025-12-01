@@ -189,7 +189,7 @@ export default function useBookPersistence({
       setPages([...shiftedPages, newPage].sort((a, b) => a.pageNumber - b.pageNumber));
       setCurrentPageNumber(insertionPoint);
 
-      alert(`Page inserted successfully at position ${insertionPoint}!`);
+      // Removed alert('Page inserted successfully at position ${insertionPoint}!');
     } catch (error: any) {
       console.error('Error inserting page:', error);
       alert(`Failed to insert page: ${error.message}`);
