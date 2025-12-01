@@ -134,47 +134,52 @@ function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: Drawin
     setIsDrawing(false);
   };
 
-  // Calculate aspect ratio for responsive display
-  const aspectRatio = imageDimensions.width / imageDimensions.height;
-  const displayHeight = imageDimensions.width ? `calc(100% / ${aspectRatio})` : 'auto';
-
   return (
-    <div className="flex flex-col items-center space-y-4 w-full h-full">
-      <div className="flex flex-wrap gap-4 p-3 bg-gray-100 rounded-lg justify-center w-full">
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Color:</label>
-          {COLOR_OPTIONS.map((c) => (
-            <button
-              key={c}
-              onClick={() => {
-                setColor(c);
-                // Reset composite operation when changing color
-                const ctx = canvasRef.current?.getContext('2d');
-                if (ctx) ctx.globalCompositeOperation = c === '#FFFFFF' ? 'destination-out' : 'source-over';
-              }}
-              className={`w-8 h-8 rounded-full border-2 transition-all ${
-                color === c ? 'ring-2 ring-offset-2 ring-blue-500' : 'hover:ring-1 ring-gray-300'
-              }`}
-              style={{ backgroundColor: c, borderColor: c === '#FFFFFF' ? '#ccc' : c }}
-              title={c === '#FFFFFF' ? 'Eraser' : c}
-            />
-          ))}
+    <div className="flex w-full h-full gap-4">
+      {/* Left Sidebar: Controls/Palette */}
+      <div className="flex-shrink-0 w-64 p-4 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col space-y-4">
+        <h4 className="text-lg font-semibold text-gray-900">Drawing Tools</h4>
+        
+        {/* Color Selector */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Color / Tool:</label>
+          <div className="flex flex-wrap gap-3">
+            {COLOR_OPTIONS.map((c) => (
+              <button
+                key={c}
+                onClick={() => {
+                  setColor(c);
+                  // Reset composite operation when changing color
+                  const ctx = canvasRef.current?.getContext('2d');
+                  if (ctx) ctx.globalCompositeOperation = c === '#FFFFFF' ? 'destination-out' : 'source-over';
+                }}
+                className={`w-8 h-8 rounded-full border-2 transition-all ${
+                  color === c ? 'ring-2 ring-offset-2 ring-blue-500' : 'hover:ring-1 ring-gray-300'
+                }`}
+                style={{ backgroundColor: c, borderColor: c === '#FFFFFF' ? '#ccc' : c }}
+                title={c === '#FFFFFF' ? 'Eraser' : c}
+              />
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-gray-700">Size:</label>
+        
+        {/* Brush Size */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Brush Size:</label>
           <input
             type="range"
             min="1"
             max="50"
             value={brushSize}
             onChange={(e) => setBrushSize(parseInt(e.target.value))}
-            className="w-24 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer range-sm"
+            className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer range-sm"
           />
-          <span className="text-sm text-gray-600">{brushSize}px</span>
+          <span className="text-sm text-gray-600 mt-1 block text-center">{brushSize}px</span>
         </div>
       </div>
       
-      <div className="flex-1 w-full flex items-center justify-center overflow-auto">
+      {/* Right Area: Canvas */}
+      <div className="flex-1 flex items-center justify-center overflow-auto bg-gray-200 rounded-lg">
         {!imageDimensions.width ? (
           <div className="w-96 h-96 flex items-center justify-center bg-gray-200">
             <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
@@ -186,8 +191,9 @@ function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: Drawin
             onMouseMove={draw}
             onMouseUp={stopDrawing}
             onMouseLeave={stopDrawing}
-            className="cursor-crosshair max-w-full max-h-full"
-            style={{ width: 'auto', height: displayHeight, maxWidth: '100%', maxHeight: '70vh' }}
+            className="cursor-crosshair max-w-full max-h-full border border-gray-400 shadow-lg"
+            // Simplified styling: rely on max-width/max-height of container and auto sizing
+            style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto' }}
           />
         )}
       </div>
@@ -327,7 +333,7 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
           </div>
         </div>
 
-        <div className="flex-1 overflow-hidden p-4 flex items-center justify-center bg-gray-100">
+        <div className="flex-1 overflow-hidden p-4 flex items-center justify-center bg-gray-100" style={{ maxHeight: '70vh' }}>
           {activeTab === 'crop' ? (
             <div className="max-w-full max-h-full flex items-center justify-center">
               {!imageLoaded && (
