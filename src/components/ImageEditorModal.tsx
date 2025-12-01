@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactCrop, { Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { X, Save, Loader2, Crop as CropIcon, Palette } from 'lucide-react';
@@ -10,6 +10,9 @@ interface ImageEditorModalProps {
   onEditComplete: (editedImageBlob: Blob) => Promise<void>;
   isProcessing: boolean;
 }
+
+// --- Constants ---
+const COLOR_OPTIONS = ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFFFF']; // Black, Red, Green, Blue, White (Eraser)
 
 function centerAspectCrop(
   mediaWidth: number,
@@ -31,239 +34,42 @@ function centerAspectCrop(
   );
 }
 
-// --- Drawing Logic ---
-const COLOR_OPTIONS = ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFFFF']; // Black, Red, Green, Blue, White (Eraser)
-
-interface DrawingCanvasProps {
-  src: string;
-  isProcessing: boolean;
-  onImageLoad: (loaded: boolean) => void;
-  onCanvasReady: (saveFn: () => Promise<Blob | null>) => void;
-}
-
-function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: DrawingCanvasProps) {
+export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete, isProcessing }: ImageEditorModalProps) {
+  const [mode, setMode] = useState<'crop' | 'draw'>('crop');
+  const [crop, setCrop] = useState<Crop>();
+  const [completedCrop, setCompletedCrop] = useState<Crop>();
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  
+  // Refs for image and canvas
+  const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Drawing State
   const [isDrawing, setIsDrawing] = useState(false);
   const [color, setColor] = useState(COLOR_OPTIONS[0]);
   const [brushSize, setBrushSize] = useState(10);
-  const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
-  const [loadError, setLoadError] = useState(false); // New state for load error
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    setLoadError(false); // Reset error on new src
-    setImageDimensions({ width: 0, height: 0 }); // Reset dimensions
-
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.onload = () => {
-      if (img.naturalWidth === 0 || img.naturalHeight === 0) {
-        console.error("Image loaded but reported zero dimensions.");
-        setLoadError(true);
-        onImageLoad(false);
-        return;
-      }
-      
-      // Set internal canvas dimensions to match image dimensions (high resolution)
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      
-      // Set display dimensions for responsiveness
-      setImageDimensions({ width: img.naturalWidth, height: img.naturalHeight });
-
-      // Draw the image onto the canvas
-      ctx.drawImage(img, 0, 0);
-      onImageLoad(true);
-      
-      // Expose the save function to the parent component
-      onCanvasReady(handleSaveDrawing);
-    };
-    img.onerror = (e) => {
-      console.error("Failed to load image for drawing.", e);
-      setLoadError(true); // Set error state
-      onImageLoad(false);
-    };
-    img.src = src;
-  }, [src, onImageLoad, onCanvasReady]);
-
-  const handleSaveDrawing = (): Promise<Blob | null> => {
-    const canvas = canvasRef.current;
-    if (!canvas) return Promise.resolve(null);
-
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
-        resolve(blob);
-      }, 'image/png');
-    });
-  };
-
-  const getCanvasScale = (canvas: HTMLCanvasElement) => {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    return { scaleX, scaleY, rect };
-  };
-
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (isProcessing || !imageDimensions.width) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const { scaleX, scaleY, rect } = getCanvasScale(canvas);
-
-    ctx.beginPath();
-    ctx.moveTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
-    setIsDrawing(true);
-  };
-
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || isProcessing || !imageDimensions.width) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const { scaleX, scaleY, rect } = getCanvasScale(canvas);
-
-    ctx.lineWidth = brushSize;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = color;
-    
-    // If color is white, use 'destination-out' for erasing effect
-    ctx.globalCompositeOperation = color === '#FFFFFF' ? 'destination-out' : 'source-over';
-
-    ctx.lineTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
-    ctx.stroke();
-  };
-
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
-
-  return (
-    <div className="flex w-full h-full gap-4">
-      {/* Left Sidebar: Controls/Palette */}
-      <div className="flex-shrink-0 w-64 p-4 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col space-y-4 overflow-y-auto">
-        <h4 className="text-lg font-semibold text-gray-900">Drawing Tools</h4>
-        
-        {/* Color Selector */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Color / Tool:</label>
-          <div className="flex flex-wrap gap-3">
-            {COLOR_OPTIONS.map((c) => (
-              <button
-                key={c}
-                onClick={() => {
-                  setColor(c);
-                  // Reset composite operation when changing color
-                  const ctx = canvasRef.current?.getContext('2d');
-                  if (ctx) ctx.globalCompositeOperation = c === '#FFFFFF' ? 'destination-out' : 'source-over';
-                }}
-                className={`w-8 h-8 rounded-full border-2 transition-all ${
-                  color === c ? 'ring-2 ring-offset-2 ring-blue-500' : 'hover:ring-1 ring-gray-300'
-                }`}
-                style={{ backgroundColor: c, borderColor: c === '#FFFFFF' ? '#ccc' : c }}
-                title={c === '#FFFFFF' ? 'Eraser' : c}
-              />
-            ))}
-          </div>
-        </div>
-        
-        {/* Brush Size */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Brush Size:</label>
-          <input
-            type="range"
-            min="1"
-            max="50"
-            value={brushSize}
-            onChange={(e) => setBrushSize(parseInt(e.target.value))}
-            className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer range-sm"
-            disabled={loadError}
-          />
-          <span className="text-sm text-gray-600 mt-1 block text-center">{brushSize}px</span>
-        </div>
-      </div>
-      
-      {/* Right Area: Canvas Display */}
-      <div className="flex-1 flex items-center justify-center overflow-auto bg-gray-200 rounded-lg min-h-[400px]">
-        {loadError ? (
-          <div className="text-center p-8 text-red-700">
-            <p className="font-semibold mb-2">Error Loading Image</p>
-            <p className="text-sm text-gray-600">Could not load the image for drawing. Please ensure the image URL is valid and the proxy function is working.</p>
-          </div>
-        ) : !imageDimensions.width ? (
-          <div className="w-96 h-96 flex items-center justify-center bg-gray-200">
-            <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
-          </div>
-        ) : (
-          <div 
-            className="relative"
-            // Set the display size of the canvas wrapper based on the image's natural aspect ratio
-            style={{ 
-              width: '100%', 
-              maxWidth: '100%', 
-              height: 'auto',
-              aspectRatio: `${imageDimensions.width} / ${imageDimensions.height}`
-            }}
-          >
-            <canvas
-              ref={canvasRef}
-              onMouseDown={startDrawing}
-              onMouseMove={draw}
-              onMouseUp={stopDrawing}
-              onMouseLeave={stopDrawing}
-              className="cursor-crosshair border border-gray-400 shadow-lg w-full h-full"
-              // Ensure canvas fills its responsive container
-              style={{ 
-                width: '100%', 
-                height: '100%',
-                // Prevent default drag behavior on canvas
-                touchAction: 'none', 
-              }}
-            />
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete, isProcessing }: ImageEditorModalProps) {
-  const [activeTab, setActiveTab] = useState<'crop' | 'color'>('crop');
-  const [crop, setCrop] = useState<Crop>();
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const [completedCrop, setCompletedCrop] = useState<Crop>();
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [drawingSaveFn, setDrawingSaveFn] = useState<(() => Promise<Blob | null>) | null>(null);
-  const imgRef = useRef<HTMLImageElement>(null);
   
-  const [loadError, setLoadError] = useState(false); // State for image loading error in crop tab
+  // State to track if drawing has started (to enable save button)
+  const [hasDrawn, setHasDrawn] = useState(false);
 
   useEffect(() => {
-    // Reset state when modal opens/closes or src changes
     if (isOpen) {
       setImageLoaded(false);
       setLoadError(false);
-      // Note: Crop state is handled by ReactCrop internally on image load
+      setMode('crop');
+      setHasDrawn(false);
     }
   }, [isOpen, src]);
 
   if (!isOpen) return null;
 
-  // --- Cropping Logic ---
+  // --- Image Loading & Cropping Logic ---
 
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { width, height } = e.currentTarget;
-    setImage(e.currentTarget);
-    setCrop(centerAspectCrop(width, height, 1)); // Default to 1:1 aspect ratio for coloring pages
+    // Default to 1:1 aspect ratio for coloring pages
+    setCrop(centerAspectCrop(width, height, 1)); 
     setImageLoaded(true);
     setLoadError(false);
   };
@@ -308,35 +114,117 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
       }, 'image/png');
     });
   };
+  
+  // --- Drawing Logic ---
+  
+  const initializeCanvasForDrawing = useCallback(() => {
+    const canvas = canvasRef.current;
+    const img = imgRef.current;
+    if (!canvas || !img) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Set canvas dimensions to match the natural size of the loaded image
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    
+    // Draw the image onto the canvas
+    ctx.drawImage(img, 0, 0);
+    
+    // Reset drawing state
+    setHasDrawn(false);
+    
+  }, []);
+  
+  useEffect(() => {
+    if (mode === 'draw' && imageLoaded) {
+      // Initialize canvas when switching to draw mode
+      initializeCanvasForDrawing();
+    }
+  }, [mode, imageLoaded, initializeCanvasForDrawing]);
 
-  const handleSaveCrop = async () => {
-    if (image && completedCrop) {
-      try {
-        const blob = await getCroppedImage(image, completedCrop);
-        await onEditComplete(blob);
-      } catch (error) {
-        console.error('Error during cropping:', error);
-        alert('Failed to crop image.');
+  const getCanvasScale = (canvas: HTMLCanvasElement) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { scaleX, scaleY, rect };
+  };
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isProcessing || mode !== 'draw') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const { scaleX, scaleY, rect } = getCanvasScale(canvas);
+
+    ctx.beginPath();
+    ctx.moveTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
+    setIsDrawing(true);
+    setHasDrawn(true);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawing || isProcessing || mode !== 'draw') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const { scaleX, scaleY, rect } = getCanvasScale(canvas);
+
+    ctx.lineWidth = brushSize;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = color;
+    
+    // If color is white, use 'destination-out' for erasing effect
+    ctx.globalCompositeOperation = color === '#FFFFFF' ? 'destination-out' : 'source-over';
+
+    ctx.lineTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+  };
+  
+  const handleSave = async () => {
+    if (isProcessing) return;
+    
+    try {
+      let blob: Blob;
+      
+      if (mode === 'crop' && completedCrop && imgRef.current) {
+        blob = await getCroppedImage(imgRef.current, completedCrop);
+      } else if (mode === 'draw' && canvasRef.current) {
+        blob = await new Promise((resolve, reject) => {
+          canvasRef.current?.toBlob((b) => {
+            if (b) resolve(b);
+            else reject(new Error('Canvas to Blob failed during drawing save.'));
+          }, 'image/png');
+        });
+      } else {
+        alert('No changes to save or image not loaded.');
+        return;
       }
+      
+      await onEditComplete(blob);
+    } catch (error) {
+      console.error('Error during save:', error);
+      alert('Failed to save image changes.');
     }
   };
   
-  const handleSaveDrawing = async () => {
-    if (drawingSaveFn) {
-      try {
-        const blob = await drawingSaveFn();
-        if (blob) {
-          await onEditComplete(blob);
-        } else {
-          alert('Failed to capture drawing.');
-        }
-      } catch (error) {
-        console.error('Error during drawing save:', error);
-        alert('Failed to save drawing.');
-      }
+  const handleClearDrawing = () => {
+    if (confirm('Are you sure you want to clear all drawings and revert to the original image?')) {
+      initializeCanvasForDrawing();
+      setHasDrawn(false);
     }
   };
 
+  const isSaveDisabled = isProcessing || !imageLoaded || (mode === 'crop' && !completedCrop) || (mode === 'draw' && !hasDrawn);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
@@ -351,79 +239,152 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
           </button>
         </div>
 
-        <div className="flex-shrink-0 border-b border-gray-200 px-4 pt-2">
-          <div className="flex gap-4">
-            <button
-              onClick={() => {
-                setActiveTab('crop');
-                setImageLoaded(false); // Reset image loaded state for crop tab
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-t-lg font-medium transition-colors ${
-                activeTab === 'crop'
-                  ? 'bg-gray-100 text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <CropIcon className="w-4 h-4" />
-              Crop
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('color');
-                setImageLoaded(false); // Reset image loaded state for drawing tab
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-t-lg font-medium transition-colors ${
-                activeTab === 'color'
-                  ? 'bg-gray-100 text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <Palette className="w-4 h-4" />
-              Color / Draw
-            </button>
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-hidden p-4 flex items-center justify-center bg-gray-100" style={{ maxHeight: '70vh' }}>
-          {activeTab === 'crop' ? (
-            <div className="max-w-full max-h-full flex items-center justify-center">
-              {loadError ? (
-                <div className="text-center p-8 text-red-700">
-                  <p className="font-semibold mb-2">Error Loading Image</p>
-                  <p className="text-sm text-gray-600">Could not load the image for cropping. Please ensure the image URL is valid and the proxy function is working.</p>
-                </div>
-              ) : !imageLoaded && (
-                <div className="w-96 h-96 flex items-center justify-center bg-gray-200">
-                  <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
-                </div>
-              )}
-              <ReactCrop
-                crop={crop}
-                onChange={c => setCrop(c)}
-                onComplete={(c) => setCompletedCrop(c)}
-                aspect={1} // Enforce 1:1 aspect ratio for coloring pages
+        <div className="flex-1 overflow-hidden p-4 flex gap-4 bg-gray-100">
+          
+          {/* Left Sidebar: Controls/Palette */}
+          <div className="flex-shrink-0 w-64 p-4 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col space-y-4 overflow-y-auto">
+            <h4 className="text-lg font-semibold text-gray-900 mb-2">Editing Mode</h4>
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => setMode('crop')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors flex-1 justify-center ${
+                  mode === 'crop'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
               >
-                <img
-                  ref={imgRef}
-                  alt="Crop me"
-                  src={src}
-                  onLoad={onImageLoad}
-                  onError={onImageError}
-                  style={{ maxHeight: '70vh', maxWidth: '100%', display: imageLoaded ? 'block' : 'none' }}
-                />
-              </ReactCrop>
+                <CropIcon className="w-4 h-4" />
+                Crop
+              </button>
+              <button
+                onClick={() => setMode('draw')}
+                disabled={!imageLoaded}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-colors flex-1 justify-center ${
+                  mode === 'draw'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50'
+                }`}
+              >
+                <Palette className="w-4 h-4" />
+                Draw
+              </button>
             </div>
-          ) : (
-            <DrawingCanvas 
-              src={src} 
-              isProcessing={isProcessing} 
-              onImageLoad={(loaded) => {
-                setImageLoaded(loaded);
-                setLoadError(!loaded);
-              }}
-              onCanvasReady={setDrawingSaveFn}
-            />
-          )}
+            
+            {mode === 'draw' && (
+              <div className="space-y-4 pt-4 border-t border-gray-200">
+                <h4 className="text-lg font-semibold text-gray-900">Drawing Tools</h4>
+                
+                {/* Color Selector */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Color / Tool:</label>
+                  <div className="flex flex-wrap gap-3">
+                    {COLOR_OPTIONS.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setColor(c)}
+                        className={`w-8 h-8 rounded-full border-2 transition-all ${
+                          color === c ? 'ring-2 ring-offset-2 ring-blue-500' : 'hover:ring-1 ring-gray-300'
+                        }`}
+                        style={{ backgroundColor: c, borderColor: c === '#FFFFFF' ? '#ccc' : c }}
+                        title={c === '#FFFFFF' ? 'Eraser' : c}
+                      />
+                    ))}
+                  </div>
+                </div>
+                
+                {/* Brush Size */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Brush Size:</label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="50"
+                    value={brushSize}
+                    onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                    className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer range-sm"
+                    disabled={loadError}
+                  />
+                  <span className="text-sm text-gray-600 mt-1 block text-center">{brushSize}px</span>
+                </div>
+                
+                <button
+                  onClick={handleClearDrawing}
+                  disabled={!hasDrawn}
+                  className="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium disabled:opacity-50"
+                >
+                  Clear Drawing
+                </button>
+              </div>
+            )}
+          </div>
+          
+          {/* Right Area: Image/Canvas Display */}
+          <div className="flex-1 flex items-center justify-center overflow-auto bg-gray-200 rounded-lg min-h-[400px] relative">
+            {loadError ? (
+              <div className="text-center p-8 text-red-700">
+                <p className="font-semibold mb-2">Error Loading Image</p>
+                <p className="text-sm text-gray-600">Could not load the image. Please ensure the image URL is valid and the proxy function is working.</p>
+              </div>
+            ) : !imageLoaded ? (
+              <div className="w-96 h-96 flex items-center justify-center bg-gray-200">
+                <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
+              </div>
+            ) : (
+              <div className="max-w-full max-h-full flex items-center justify-center">
+                {/* Cropping Mode */}
+                {mode === 'crop' && (
+                  <ReactCrop
+                    crop={crop}
+                    onChange={c => setCrop(c)}
+                    onComplete={(c) => setCompletedCrop(c)}
+                    aspect={1} // Enforce 1:1 aspect ratio for coloring pages
+                  >
+                    <img
+                      ref={imgRef}
+                      alt="Crop me"
+                      src={src}
+                      onLoad={onImageLoad}
+                      onError={onImageError}
+                      style={{ maxHeight: '70vh', maxWidth: '100%' }}
+                    />
+                  </ReactCrop>
+                )}
+                
+                {/* Drawing Mode */}
+                {mode === 'draw' && (
+                  <div className="relative max-w-full max-h-full">
+                    <img
+                      ref={imgRef}
+                      alt="Drawing base"
+                      src={src}
+                      onLoad={onImageLoad}
+                      onError={onImageError}
+                      // Hide the image but keep it loaded for canvas initialization
+                      style={{ display: 'none' }} 
+                    />
+                    <canvas
+                      ref={canvasRef}
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      className="cursor-crosshair border border-gray-400 shadow-lg"
+                      // Set display size based on image's natural aspect ratio
+                      style={{ 
+                        width: '100%', 
+                        height: 'auto',
+                        maxWidth: '100%',
+                        maxHeight: '70vh',
+                        aspectRatio: imgRef.current ? `${imgRef.current.naturalWidth} / ${imgRef.current.naturalHeight}` : '1/1',
+                        touchAction: 'none', 
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="p-4 border-t border-gray-200 flex justify-end gap-3 flex-shrink-0">
@@ -433,44 +394,23 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
           >
             Cancel
           </button>
-          {activeTab === 'crop' && (
-            <button
-              onClick={handleSaveCrop}
-              disabled={!completedCrop || isProcessing || !imageLoaded}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Save Cropped Image
-                </>
-              )}
-            </button>
-          )}
-          {activeTab === 'color' && (
-            <button
-              onClick={handleSaveDrawing}
-              disabled={isProcessing || !imageLoaded}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Done Coloring & Save
-                </>
-              )}
-            </button>
-          )}
+          <button
+            onClick={handleSave}
+            disabled={isSaveDisabled}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Changes
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
