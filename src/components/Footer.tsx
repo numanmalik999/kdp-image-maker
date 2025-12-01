@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 
 interface FooterProps {
   onPageClick: (slug: string) => void;
+  onHomeClick: () => void; // New prop for home navigation
 }
 
 interface FooterLink {
@@ -10,7 +11,7 @@ interface FooterLink {
   title: string;
 }
 
-export default function Footer({ onPageClick }: FooterProps) {
+export default function Footer({ onPageClick, onHomeClick }: FooterProps) {
   const [footerLinks, setFooterLinks] = useState<FooterLink[]>([]);
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export default function Footer({ onPageClick }: FooterProps) {
             <ul className="space-y-2">
               <li>
                 <button
-                  onClick={() => window.location.reload()}
+                  onClick={onHomeClick}
                   className="text-gray-400 hover:text-white transition-colors text-sm"
                 >
                   Home

@@ -49,12 +49,16 @@ export default function App() {
     await supabase.auth.signOut();
     // The onAuthStateChange listener handles the navigation to '/'
   };
+  
+  const handleHomeClick = () => {
+    navigate('/');
+  };
 
   if (staticPageSlug) {
     return (
       <>
         <StaticPage slug={staticPageSlug} onBack={handleBack} />
-        <Footer onPageClick={handlePageClick} />
+        <Footer onPageClick={handlePageClick} onHomeClick={handleHomeClick} />
       </>
     );
   }
@@ -92,7 +96,7 @@ export default function App() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="*" element={<div className="p-6 text-center">404</div>} />
       </Routes>
-      <Footer onPageClick={handlePageClick} />
+      <Footer onPageClick={handlePageClick} onHomeClick={handleHomeClick} />
     </>
   );
 }
