@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import ReactCrop, { Crop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 import { X, Save, Loader2, Crop as CropIcon } from 'lucide-react';
+import { TRIM_SIZES } from '../types'; // Import TRIM_SIZES
 
 interface ImageEditorModalProps {
   isOpen: boolean;
@@ -11,11 +12,28 @@ interface ImageEditorModalProps {
   isProcessing: boolean;
 }
 
+// Helper function updated to accept optional aspect
 function centerAspectCrop(
   mediaWidth: number,
   mediaHeight: number,
-  aspect: number,
+  aspect: number | undefined,
 ) {
+  if (aspect === undefined) {
+    // For freeform, initialize a centered crop that covers 90% of the image area
+    return centerCrop(
+      {
+        unit: '%',
+        width: 90,
+        height: 90,
+        x: 5,
+        y: 5,
+      },
+      mediaWidth,
+      mediaHeight,
+    );
+  }
+  
+  // If aspect is defined, use makeAspectCrop
   return centerCrop(
     makeAspectCrop(
       {
@@ -31,11 +49,20 @@ function centerAspectCrop(
   );
 }
 
+const ASPECT_OPTIONS = [
+  { label: 'Freeform', aspect: undefined },
+  { label: 'Square (1:1)', aspect: 1 },
+  { label: 'KDP 8.5x11', aspect: TRIM_SIZES['8.5x11'].width / TRIM_SIZES['8.5x11'].height },
+  { label: 'KDP 6x9', aspect: TRIM_SIZES['6x9'].width / TRIM_SIZES['6x9'].height },
+  { label: 'KDP 5x8', aspect: TRIM_SIZES['5x8'].width / TRIM_SIZES['5x8'].height },
+];
+
 export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete, isProcessing }: ImageEditorModalProps) {
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<Crop>();
   const [imageLoaded, setImageLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
+  const [aspect, setAspect] = useState<number | undefined>(undefined); // Default to freeform
   
   // Refs for image and canvas
   const imgRef = useRef<HTMLImageElement>(null);
@@ -44,6 +71,7 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
     if (isOpen) {
       setImageLoaded(false);
       setLoadError(false);
+      setAspect(undefined); // Reset aspect on open
     }
   }, [isOpen, src]);
 
@@ -53,8 +81,8 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
 
   const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const { width, height } = e.currentTarget;
-    // Default to 1:1 aspect ratio for coloring pages
-    setCrop(centerAspectCrop(width, height, 1)); 
+    // Initialize crop to cover 90% of the image, centered, using the current aspect state (default undefined/freeform)
+    setCrop(centerAspectCrop(width, height, aspect)); 
     setImageLoaded(true);
     setLoadError(false);
   };
@@ -112,6 +140,14 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
     }
   };
 
+  const handleAspectChange = (newAspect: number | undefined) => {
+    setAspect(newAspect);
+    if (imgRef.current && imageLoaded) {
+        // Recalculate crop based on new aspect
+        setCrop(centerAspectCrop(imgRef.current.width, imgRef.current.height, newAspect));
+    }
+  };
+
   const isSaveDisabled = isProcessing || !imageLoaded || !completedCrop;
 
   return (
@@ -129,16 +165,33 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
 
         <div className="flex-1 overflow-auto p-4 flex gap-4 bg-gray-100">
           
-          {/* Left Sidebar: Controls/Palette (Cropping is the only mode now) */}
+          {/* Left Sidebar: Controls/Palette */}
           <div className="flex-shrink-0 w-64 p-4 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col space-y-4 overflow-y-auto">
             <h4 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
               <CropIcon className="w-5 h-5 text-blue-600" />
               Crop Tool
             </h4>
             
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
-              <p className="font-medium mb-1">Aspect Ratio:</p>
-              <p>The crop area is locked to a 1:1 aspect ratio, suitable for square coloring pages.</p>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Aspect Ratio:</label>
+              {ASPECT_OPTIONS.map((option, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleAspectChange(option.aspect)}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                    aspect === option.aspect
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800 mt-4">
+              <p className="font-medium mb-1">Instructions:</p>
+              <p>Select an aspect ratio or choose 'Freeform' to adjust the crop area.</p>
             </div>
           </div>
           
@@ -155,29 +208,28 @@ export default function ImageEditorModal({ isOpen, onClose, src, onEditComplete,
               </div>
             )}
             
-            {imageLoaded && (
-              <div className="max-w-full max-h-full flex items-center justify-center">
-                <ReactCrop
-                  crop={crop}
-                  onChange={c => setCrop(c)}
-                  onComplete={(c) => setCompletedCrop(c)}
-                  aspect={1} // Enforce 1:1 aspect ratio
-                >
-                  <img
-                    ref={imgRef}
-                    alt="Editable image"
-                    src={src}
-                    onLoad={onImageLoad}
-                    onError={onImageError}
-                    crossOrigin="anonymous"
-                    style={{ 
-                      maxHeight: '70vh', 
-                      maxWidth: '100%',
-                    }}
-                  />
-                </ReactCrop>
-              </div>
-            )}
+            {/* CRITICAL: Ensure ReactCrop uses the dynamic aspect state */}
+            <div className="max-w-full max-h-full flex items-center justify-center">
+              <ReactCrop
+                crop={crop}
+                onChange={c => setCrop(c)}
+                onComplete={(c) => setCompletedCrop(c)}
+                aspect={aspect} 
+              >
+                <img
+                  ref={imgRef}
+                  alt="Editable image"
+                  src={src}
+                  onLoad={onImageLoad}
+                  onError={onImageError}
+                  crossOrigin="anonymous"
+                  style={{ 
+                    maxHeight: '70vh', 
+                    maxWidth: '100%',
+                  }}
+                />
+              </ReactCrop>
+            </div>
           </div>
         </div>
 
