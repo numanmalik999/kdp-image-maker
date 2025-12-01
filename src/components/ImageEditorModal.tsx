@@ -137,7 +137,7 @@ function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: Drawin
   return (
     <div className="flex w-full h-full gap-4">
       {/* Left Sidebar: Controls/Palette */}
-      <div className="flex-shrink-0 w-64 p-4 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col space-y-4">
+      <div className="flex-shrink-0 w-64 p-4 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col space-y-4 overflow-y-auto">
         <h4 className="text-lg font-semibold text-gray-900">Drawing Tools</h4>
         
         {/* Color Selector */}
@@ -178,23 +178,39 @@ function DrawingCanvas({ src, isProcessing, onImageLoad, onCanvasReady }: Drawin
         </div>
       </div>
       
-      {/* Right Area: Canvas */}
-      <div className="flex-1 flex items-center justify-center overflow-auto bg-gray-200 rounded-lg">
+      {/* Right Area: Canvas Display */}
+      <div className="flex-1 flex items-center justify-center overflow-auto bg-gray-200 rounded-lg min-h-[400px]">
         {!imageDimensions.width ? (
           <div className="w-96 h-96 flex items-center justify-center bg-gray-200">
             <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
           </div>
         ) : (
-          <canvas
-            ref={canvasRef}
-            onMouseDown={startDrawing}
-            onMouseMove={draw}
-            onMouseUp={stopDrawing}
-            onMouseLeave={stopDrawing}
-            className="cursor-crosshair max-w-full max-h-full border border-gray-400 shadow-lg"
-            // Simplified styling: rely on max-width/max-height of container and auto sizing
-            style={{ maxWidth: '100%', maxHeight: '100%', width: 'auto', height: 'auto' }}
-          />
+          <div 
+            className="relative"
+            // Set the display size of the canvas wrapper based on the image's natural aspect ratio
+            style={{ 
+              width: '100%', 
+              maxWidth: '100%', 
+              height: 'auto',
+              aspectRatio: `${imageDimensions.width} / ${imageDimensions.height}`
+            }}
+          >
+            <canvas
+              ref={canvasRef}
+              onMouseDown={startDrawing}
+              onMouseMove={draw}
+              onMouseUp={stopDrawing}
+              onMouseLeave={stopDrawing}
+              className="cursor-crosshair border border-gray-400 shadow-lg w-full h-full"
+              // Ensure canvas fills its responsive container
+              style={{ 
+                width: '100%', 
+                height: '100%',
+                // Prevent default drag behavior on canvas
+                touchAction: 'none', 
+              }}
+            />
+          </div>
         )}
       </div>
     </div>
