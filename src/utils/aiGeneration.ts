@@ -10,7 +10,81 @@ export interface GeneratedContent {
   }>;
 }
 
-// ... (existing functions: generateBookContent, convertToChapters, generatePageContent)
+export async function generateBookContent(
+  prompt: string,
+  targetPages: number,
+  fontSize: number,
+  trimSize: string,
+  token: string,
+  apiKey: string,
+  model: TextModel
+): Promise<GeneratedContent> {
+  const apiUrl = `${SUPABASE_URL}/functions/v1/generate-book-content`;
+
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token || ''}`,
+    },
+    body: JSON.stringify({
+      prompt,
+      targetPages,
+      fontSize,
+      trimSize,
+      apiKey,
+      model,
+    }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.text();
+    throw new Error(errorData || 'Failed to generate book content');
+  }
+
+  const data = await res.json();
+  return data as GeneratedContent;
+}
+
+export async function generatePageContent(
+  prompt: string,
+  pageNumber: number,
+  totalPages: number,
+  fontSize: number,
+  token: string,
+  apiKey: string,
+  model: TextModel,
+  bookContext?: string,
+  activityTypes?: PageActivityType[]
+): Promise<string> {
+  const apiUrl = `${SUPABASE_URL}/functions/v1/generate-page-content`;
+
+  const res = await fetch(apiUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token || ''}`,
+    },
+    body: JSON.stringify({
+      prompt,
+      pageNumber,
+      totalPages,
+      fontSize,
+      bookContext,
+      activityTypes,
+      apiKey,
+      model,
+    }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.text();
+    throw new Error(errorData || 'Failed to generate page content');
+  }
+
+  const data = await res.json();
+  return data.content;
+}
 
 export async function generateColoringImage(
   prompt: string,
