@@ -96,7 +96,7 @@ export default function useBookGeneration({
     }
   };
 
-  const handleGenerateImage = async (pageNumber: number, prompt: string) => {
+  const handleGenerateImage = async (pageNumber: number, prompt: string, referenceImageUrl?: string) => {
     if (!book || !bookId) return;
     
     const { data: { session } } = await supabase.auth.getSession();
@@ -125,7 +125,8 @@ export default function useBookGeneration({
         aiConfig.imageModel, // Pass Model
         bookId,
         activityTypes,
-        tracingWord
+        tracingWord,
+        referenceImageUrl // Pass the reference image URL
       );
 
       // Save to DB

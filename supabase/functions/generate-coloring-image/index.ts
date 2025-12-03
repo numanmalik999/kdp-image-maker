@@ -14,6 +14,7 @@ interface RequestBody {
   tracingWord?: string;
   apiKey: string; // New: User's API Key
   model: string; // New: User's selected model (should be dall-e-3)
+  referenceImageUrl?: string; // New: Reference image URL
 }
 
 // @ts-ignore: Deno is available in edge runtime
@@ -27,7 +28,7 @@ Deno.serve(async (req: Request) => {
 
   try {
     const requestBody = await req.json();
-    const { prompt, activityTypes, tracingWord, apiKey, model } = requestBody as RequestBody;
+    const { prompt, activityTypes, tracingWord, apiKey, model, referenceImageUrl } = requestBody as RequestBody;
 
     if (!prompt) {
       return new Response(JSON.stringify({ error: "Prompt is required" }), {
@@ -65,8 +66,16 @@ Deno.serve(async (req: Request) => {
     const tracingNote = tracingWord && activityTypes?.includes('tracing')
       ? ` Include the tracing word '${tracingWord}' in large bold letters at the bottom of the image for tracing practice.`
       : '';
+      
+    // If a reference image is provided, add a note to the prompt to guide the style
+    const referenceNote = referenceImageUrl 
+      ? ` IMPORTANT: Use the style and composition of the image found at this URL as a strong reference: ${referenceImageUrl}`
+      : '';
 
-    const enhancedPrompt = `${styleModifier} Subject: ${prompt}.` + tracingNote;
+    const enhancedPrompt = `${styleModifier} Subject: ${prompt}.` + tracingNote + referenceNote;
+    
+    console.log("Enhanced Prompt:", enhancedPrompt);
+    console.log("Reference Image URL:", referenceImageUrl);
 
     const response = await fetch("https://api.openai.com/v1/images/generations", {
       method: "POST",

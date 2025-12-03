@@ -10,7 +10,7 @@ import { BookSettings, Page, EditorTab, UserAIConfig } from '../../types';
 import { generatePDF } from '../../utils/pdfGenerator';
 import { generateEPUB } from '../../utils/epubGenerator';
 import { SUPABASE_URL } from '../../lib/config';
-import { generateBookContent } from '../../utils/aiGeneration';
+import { generateBookContent, uploadReferenceImage } from '../../utils/aiGeneration'; // Import uploadReferenceImage
 import { supabase } from '../../lib/supabase';
 
 // Import new hooks
@@ -60,6 +60,10 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     }
   }, []);
   
+  // --- Reference Image State ---
+  const [referenceImageUrl, setReferenceImageUrl] = useState<string | undefined>(undefined);
+  const [isUploadingReference, setIsUploadingReference] = useState(false);
+
   // --- UI State Management ---
   const [isSaving, setIsSaving] = useState(false);
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
@@ -135,6 +139,37 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     } else if (tab === 'pages') {
       setCurrentPageNumber(1); // Default to first content page
     }
+  };
+
+  // --- Reference Image Handlers ---
+  
+  const handleReferenceImageUpload = async (file: File) => {
+    if (!bookId) return;
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert('Please log in to upload images.');
+      return;
+    }
+    
+    setIsUploadingReference(true);
+    setReferenceImageUrl(undefined); // Clear previous URL
+    
+    try {
+      const url = await uploadReferenceImage(file, user.id);
+      setReferenceImageUrl(url);
+      alert('Reference image uploaded successfully!');
+    } catch (error: any) {
+      console.error('Reference Image Upload Error:', error);
+      alert(`Failed to upload reference image: ${error.message}`);
+    } finally {
+      setIsUploadingReference(false);
+    }
+  };
+  
+  const handleClearReferenceImage = () => {
+    setReferenceImageUrl(undefined);
+    alert('Reference image cleared.');
   };
 
   // --- AI Content Handlers (Full Book) ---
@@ -241,8 +276,6 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
     }
   };
 
-  // Removed handleExportKindle
-
   // --- Image Editing ---
 
   const handleEditImage = (pageNumber: number) => {
@@ -274,6 +307,11 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
   
   const handleInsertPageWrapper = async (insertionPoint: number) => {
     await handleInsertPage(insertionPoint, setCurrentPageNumber);
+  };
+  
+  // Wrapper for image generation to include the reference image URL
+  const handleGenerateImageWrapper = async (pageNumber: number, prompt: string) => {
+    await handleGenerateImage(pageNumber, prompt, referenceImageUrl);
   };
 
 
@@ -334,7 +372,7 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
             pages={pages}
             onPagesChange={handlePagesChange}
             onGeneratePage={handleGeneratePage}
-            onGenerateImage={handleGenerateImage}
+            onGenerateImage={handleGenerateImageWrapper} // Use wrapper
             onEditImage={handleEditImage}
             fontSize={book.font_size}
             onGeneratePDF={handleGeneratePDF}
@@ -353,6 +391,11 @@ export default function BookEditor({ onBack }: { onBack: () => void; }) {
             // Pass AI Config and Modal Opener down
             aiConfig={aiConfig}
             onOpenAIConfigModal={() => setIsAIConfigModalOpen(true)}
+            // New Reference Image Props
+            referenceImageUrl={referenceImageUrl}
+            onReferenceImageUpload={handleReferenceImageUpload}
+            onClearReferenceImage={handleClearReferenceImage}
+            isUploadingReference={isUploadingReference}
           />
         </div>
       </div>

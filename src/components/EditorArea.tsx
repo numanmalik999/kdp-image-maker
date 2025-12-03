@@ -28,6 +28,11 @@ interface EditorAreaProps {
   // New Props
   aiConfig: UserAIConfig;
   onOpenAIConfigModal: () => void;
+  // Reference Image Props
+  referenceImageUrl?: string;
+  onReferenceImageUpload: (file: File) => Promise<void>;
+  onClearReferenceImage: () => void;
+  isUploadingReference: boolean;
 }
 
 export default function EditorArea({
@@ -52,6 +57,10 @@ export default function EditorArea({
   isSaving,
   aiConfig,
   onOpenAIConfigModal,
+  referenceImageUrl,
+  onReferenceImageUpload,
+  onClearReferenceImage,
+  isUploadingReference,
 }: EditorAreaProps) {
 
   // Calculate words based on existing pages content
@@ -145,6 +154,11 @@ export default function EditorArea({
               // New Props
               aiConfig={aiConfig}
               onOpenAIConfigModal={onOpenAIConfigModal}
+              // Reference Image Props
+              referenceImageUrl={referenceImageUrl}
+              onReferenceImageUpload={onReferenceImageUpload}
+              onClearReferenceImage={onClearReferenceImage}
+              isUploadingReference={isUploadingReference}
             />
           </div>
 
